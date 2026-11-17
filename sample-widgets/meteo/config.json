@@ -1,0 +1,31 @@
+{
+  "id": "meteo",
+  "title": "Meteo",
+  "description": "Meteo (ville au choix), fond transparent, icones animees, tailles DEFAULT/LARGE/FULL.",
+  "iconId": "date_time",
+  "size": 1,
+  "settings": [
+    {
+      "id": "city",
+      "title": "Ville",
+      "type": "choice",
+      "options": [
+        { "value": "paris", "label": "Paris" },
+        { "value": "lyon", "label": "Lyon" },
+        { "value": "marseille", "label": "Marseille" },
+        { "value": "lehavre", "label": "Le Havre" }
+      ],
+      "default": "paris"
+    },
+    {
+      "id": "unit",
+      "title": "Unite de temperature",
+      "type": "choice",
+      "options": [
+        { "value": "c", "label": "Celsius (°C)" },
+        { "value": "k", "label": "Kelvin (K)" }
+      ],
+      "default": "c"
+    }
+  ]
+}
