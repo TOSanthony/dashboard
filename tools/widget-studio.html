@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<title>PS5 Widget Studio</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<style>
+  :root{
+    --bg:#0b0e14; --panel:#14181f; --panel2:#1b212b; --border:#2a3240;
+    --text:#e7ebf0; --dim:#8a95a6; --accent:#4fa8ff; --bad:#ff6b6b; --good:#5fd38d;
+    --mat:#17191ef0;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+    font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;}
+  #root{height:100%;}
+  .app{display:grid;grid-template-columns:minmax(380px,1fr) minmax(420px,1.1fr);height:100%;}
+  .col{display:flex;flex-direction:column;min-height:0;}
+  .left{border-right:1px solid var(--border);}
+  .tabs{display:flex;gap:4px;padding:8px 8px 0;background:var(--panel);}
+  .tab{padding:8px 14px;border-radius:8px 8px 0 0;background:var(--panel2);color:var(--dim);
+    cursor:pointer;font-size:13px;user-select:none;}
+  .tab.active{background:var(--bg);color:var(--text);font-weight:600;}
+  textarea{flex:1;width:100%;background:var(--bg);color:var(--text);border:none;outline:none;
+    font-family:"SF Mono",Consolas,Menlo,monospace;font-size:12.5px;line-height:1.5;padding:12px;
+    resize:none;tab-size:2;}
+  .toolbar{display:flex;gap:8px;align-items:center;padding:8px;background:var(--panel);
+    border-bottom:1px solid var(--border);flex-wrap:wrap;}
+  select,button{background:var(--panel2);color:var(--text);border:1px solid var(--border);
+    border-radius:6px;padding:6px 10px;font-size:12.5px;cursor:pointer;}
+  button:hover,select:hover{border-color:var(--accent);}
+  button.primary{background:var(--accent);color:#05101c;border-color:var(--accent);font-weight:600;}
+  .err{background:#2a1418;color:var(--bad);border:1px solid #4a2228;border-radius:6px;
+    padding:8px 10px;margin:8px;font-size:12px;white-space:pre-wrap;font-family:monospace;}
+  .right{background:
+      radial-gradient(1200px 600px at 20% -10%, #15345c55, transparent),
+      linear-gradient(160deg,#0a0d14,#05070c 60%);
+    padding:16px;overflow:auto;}
+  .stage{min-height:260px;display:flex;align-items:flex-start;justify-content:center;padding:24px 8px;}
+  .controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px;}
+  .controls label{font-size:12px;color:var(--dim);display:flex;gap:6px;align-items:center;}
+  .pad{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px;}
+  .pad button{min-width:64px;}
+  .settingsbox{background:var(--panel);border:1px solid var(--border);border-radius:10px;
+    padding:10px 12px;margin-top:14px;}
+  .settingsbox h3{margin:0 0 8px;font-size:12px;color:var(--dim);text-transform:uppercase;
+    letter-spacing:.04em;}
+  .setting-row{display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:5px 0;font-size:13px;}
+  .log{background:#05070c;border:1px solid var(--border);border-radius:8px;margin-top:14px;
+    padding:8px 10px;font-family:monospace;font-size:11.5px;color:var(--dim);max-height:140px;
+    overflow:auto;}
+  .log .line{white-space:pre-wrap;}
+  .hint{font-size:12px;color:var(--dim);margin:0 8px 8px;}
+  h1{font-size:14px;margin:0;padding:10px 12px;background:var(--panel);border-bottom:1px solid var(--border);}
+  .badge{font-size:10px;padding:2px 6px;border-radius:999px;background:var(--panel2);color:var(--dim);
+    margin-left:8px;}
+  .ghbox{background:var(--panel);border-bottom:1px solid var(--border);padding:8px;}
+  .ghrow{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px;}
+  .ghrow input{background:var(--panel2);color:var(--text);border:1px solid var(--border);
+    border-radius:6px;padding:6px 8px;font-size:12px;}
+  .ghrow input.owner,.ghrow input.repo{width:120px;}
+  .ghrow input.path{width:140px;}
+  .ghrow input.branch{width:70px;}
+  .ghrow input.token{width:220px;font-family:monospace;}
+  .ghrow select{min-width:140px;}
+  .ghnote{font-size:11px;color:var(--dim);margin:0 0 6px;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+"use strict";
+var h = React.createElement;
+
+/* ---------------------------------------------------------------------
+ * Minimal emulation of the Welcome Hub widget SDK (the "wh" global that
+ * real widget.js files on a PS5 receive). Only what the widgets actually
+ * use is implemented: View/Label/Title/Image/Focusable, StyleSheet,
+ * FontSizePS, Button constants, onPressed, register. Good enough to
+ * preview a widget.js file in a browser without a console.
+ *
+ * Known, deliberate difference from the real console: borderWidth/
+ * borderColor DO render here (plain CSS), whereas on real hardware they
+ * are confirmed NOT to render -- prefer two overlapping filled shapes
+ * (see the horloge widget's dial) if you want something that also looks
+ * right on the console itself.
+ * ------------------------------------------------------------------- */
+var ICONS = {
+  date_time: '🕒', game: '🎮', app_welcome: '⭐',
+  trophy: '🏆', battery: '🔋', controller: '🎮'
+};
+function iconFor(id){
+  if (!id) return '●';
+  if (ICONS[id]) return ICONS[id];
+  if (String(id).indexOf('wh:') === 0) return '🖼';
+  return '●';
+}
+var FONT_SIZES = {
+  Size3XLarge:72, Size2XLarge:54, SizeXLarge:45, SizeLarge:36, SizeNormal:30,
+  SizeSmall:27, SizeXSmall:24, Size2XSmall:21, Size3XSmall:18, Size4XSmall:15
+};
+var SIZE_DIMS = {1:[504,152], 2:[504,328], 3:[504,504]};
+
+function flattenStyle(s){
+  if (!s) return {};
+  if (Array.isArray(s)) { var o={}; for (var i=0;i<s.length;i++) Object.assign(o, flattenStyle(s[i])); return o; }
+  return s;
+}
+var PX = {width:1,height:1,top:1,left:1,right:1,bottom:1,fontSize:1,borderRadius:1,borderWidth:1,
+  margin:1,marginTop:1,marginBottom:1,marginLeft:1,marginRight:1,
+  padding:1,paddingTop:1,paddingBottom:1,paddingLeft:1,paddingRight:1,minWidth:1,minHeight:1};
+function px(v){ return (typeof v === 'number') ? v + 'px' : v; }
+function toCss(style){
+  var flat = flattenStyle(style), out = {};
+  for (var k in flat){
+    var v = flat[k];
+    if (k === 'paddingHorizontal'){ out.paddingLeft = px(v); out.paddingRight = px(v); continue; }
+    if (k === 'paddingVertical'){ out.paddingTop = px(v); out.paddingBottom = px(v); continue; }
+    if (k === 'marginHorizontal'){ out.marginLeft = px(v); out.marginRight = px(v); continue; }
+    if (k === 'marginVertical'){ out.marginTop = px(v); out.marginBottom = px(v); continue; }
+    if (k === 'numberOfLines'){ out.display='-webkit-box'; out.WebkitBoxOrient='vertical';
+      out.WebkitLineClamp=String(v); out.overflow='hidden'; continue; }
+    if (k === 'transform' && Array.isArray(v)){
+      out.transform = v.map(function(t){
+        var key = Object.keys(t)[0], val = t[key];
+        if (typeof val === 'number' && /translate|perspective/i.test(key)) val = val + 'px';
+        return key + '(' + val + ')';
+      }).join(' ');
+      continue;
+    }
+    if (k === 'flexDirection' || k==='alignItems' || k==='justifyContent' || k==='position' ||
+        k==='overflow' || k==='textAlign' || k==='color' || k==='backgroundColor' || k==='opacity' ||
+        k==='fontWeight' || k==='flex' || k==='flexWrap' || k==='zIndex'){ out[k]=v; continue; }
+    if (PX[k] && typeof v === 'number') v = v + 'px';
+    out[k] = v;
+  }
+  return out;
+}
+
+function makeWH(opts){
+  var wh = {};
+  wh.React = React;
+  wh.StyleSheet = { create: function(o){ return o; }, flatten: flattenStyle };
+  wh.FontSizePS = FONT_SIZES;
+  wh.Button = {Cross:'Enter',Circle:'Back',Square:'Square',Triangle:'Triangle',Options:'Options',
+    L1:'L',R1:'R',L2:'L2',R2:'R2',L3:'L3',R3:'R3',Up:'Up',Down:'Down',Left:'Left',Right:'Right'};
+  wh.Metrics = {WIDGET_WIDTH:504,WIDGET_HEIGHT:152,WIDGET_PADDING:16,WIDGET_BORDER_RADIUS:16};
+  wh.dims = function(sz){ var d = SIZE_DIMS[sz] || SIZE_DIMS[1]; return {width:d[0], height:d[1]}; };
+
+  // RN Views are flex containers (column) by default, unlike plain <div>s,
+  // AND every View is a valid positioning context for absolutely-positioned
+  // children regardless of its own position value -- a plain <div> only
+  // becomes one with position:relative/absolute/etc set explicitly.
+  // Without this, absolutely positioned children (very common: that's how
+  // the mat background, dial rings and hands are all built) escape to the
+  // nearest *actual* positioned ancestor instead -- which can be the page
+  // itself, landing the whole thing in the top-left corner of the screen.
+  // This is purely a quirk of emulating RN with plain HTML/CSS here; it is
+  // not a bug in widget.js itself.
+  wh.View = function(p){
+    return h('div', {style: Object.assign({display:'flex', flexDirection:'column', position:'relative'}, toCss(p.style))}, p.children);
+  };
+
+  wh.Label = function(p){
+    var style = toCss(Object.assign({fontSize:21,color:'#fff'}, flattenStyle(p.style)));
+    return h('div', {style: style}, p.children);
+  };
+
+  wh.Title = function(p){
+    return h('div', {style: Object.assign({display:'flex',alignItems:'center',height:40,minWidth:0}, toCss(p.style))},
+      h('span', {style:{width:40,minWidth:40,textAlign:'center',marginRight:4,fontSize:20}}, iconFor(p.iconId)),
+      h('span', {style:{flex:1,fontWeight:700,fontSize:21,color:'#fff',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}, p.children),
+      p.badge != null ? h('span', {style:{fontSize:16,opacity:.75,color:'#fff',marginLeft:8,whiteSpace:'nowrap'}}, String(p.badge)) : null
+    );
+  };
+
+  wh.IconPS = function(p){
+    var style = toCss(p.style);
+    return h('span', {style: Object.assign({fontSize:(style.width||24)*0.7, display:'flex',
+      alignItems:'center',justifyContent:'center'}, style)}, iconFor(p.iconId));
+  };
+
+  wh.Image = function(p){
+    var style = toCss(p.style);
+    var uri = p.source && (typeof p.source === 'string' ? p.source : p.source.uri);
+    if (!uri) return h('div', {style: Object.assign({background:'#263a58'}, style)});
+    var fit = p.resizeMode === 'contain' ? 'contain' : p.resizeMode === 'stretch' ? 'fill' : 'cover';
+    return h('img', {src: uri, style: Object.assign({objectFit: fit}, style), onError: function(e){ e.target.style.background = '#263a58'; }});
+  };
+
+  wh.ScrollView = function(p){ return h('div', {style: Object.assign({overflow:'auto'}, toCss(p.style))}, p.children); };
+
+  wh.Focusable = function(p){
+    var st = React.useState(false), sel = st[0], setSel = st[1];
+    var style = toCss([p.style, sel ? p.focusedStyle : null]);
+    var content = typeof p.children === 'function' ? p.children(sel) : p.children;
+    return h('div', {
+      style: Object.assign({cursor:'pointer'}, style),
+      onMouseEnter: function(){ setSel(true); },
+      onMouseLeave: function(){ setSel(false); },
+      onClick: function(){ if (p.onPress) p.onPress(); }
+    }, content);
+  };
+
+  wh.onPressed = function(btn, fn){
+    var ref = React.useRef(fn); ref.current = fn;
+    React.useEffect(function(){
+      var list = opts.pressHandlers[btn] || (opts.pressHandlers[btn] = []);
+      var entry = {ref: ref};
+      list.push(entry);
+      return function(){ var i = list.indexOf(entry); if (i >= 0) list.splice(i, 1); };
+    }, [btn]);
+  };
+
+  wh.logger = function(tag){ return function(msg){ opts.log(tag, msg); }; };
+  wh.log = function(msg){ opts.log('widget', msg); };
+
+  wh.register = function(C){ opts.onRegister(C); };
+
+  return wh;
+}
+
+/* ---------------------------------------------------------------------
+ * GitHub integration: list widget folders in a repo, load one into the
+ * editors, save the editors back. Uses the Contents API directly from the
+ * browser (it sends CORS headers) -- no backend involved. Reading a public
+ * repo works with no token (rate-limited); writing always needs one with
+ * "contents: write" on that repo. The token is kept only in this browser's
+ * localStorage, never sent anywhere but api.github.com.
+ * ------------------------------------------------------------------- */
+var GH_LS_KEY = 'ps5_widget_studio_gh_v1';
+function ghLoadSettings(){
+  try { return Object.assign({owner:'', repo:'', branch:'main', path:'sample-widgets', token:''},
+    JSON.parse(localStorage.getItem(GH_LS_KEY) || '{}')); }
+  catch (e) { return {owner:'', repo:'', branch:'main', path:'sample-widgets', token:''}; }
+}
+function ghSaveSettings(s){ try { localStorage.setItem(GH_LS_KEY, JSON.stringify(s)); } catch (e) {} }
+
+function b64encodeUtf8(str){ return btoa(unescape(encodeURIComponent(str))); }
+function b64decodeUtf8(b64){ return decodeURIComponent(escape(atob(b64.replace(/\n/g, '')))); }
+
+async function ghApi(gh, method, path, body){
+  var headers = {Accept: 'application/vnd.github+json'};
+  if (gh.token) headers.Authorization = 'Bearer ' + gh.token;
+  var res = await fetch('https://api.github.com/repos/' + gh.owner + '/' + gh.repo + path, {
+    method: method, headers: headers, body: body ? JSON.stringify(body) : undefined
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) { var t = ''; try { t = (await res.json()).message; } catch (e) {} throw new Error(res.status + (t ? ' ' + t : '')); }
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+// Lists widget folder names under gh.path (each folder is one widget).
+async function ghListWidgets(gh){
+  var items = await ghApi(gh, 'GET', '/contents/' + encodeURIComponent(gh.path) + '?ref=' + encodeURIComponent(gh.branch));
+  if (!Array.isArray(items)) return [];
+  return items.filter(function(i){ return i.type === 'dir'; }).map(function(i){ return i.name; }).sort();
+}
+
+// Loads one widget's config.json + widget.js; sha values are needed to
+// update those exact files later (the Contents API refuses a write that
+// doesn't name the file's current sha, to avoid clobbering a concurrent
+// change).
+async function ghLoadWidget(gh, id){
+  var base = '/contents/' + encodeURIComponent(gh.path) + '/' + encodeURIComponent(id);
+  var cfg = await ghApi(gh, 'GET', base + '/config.json?ref=' + encodeURIComponent(gh.branch));
+  var js = await ghApi(gh, 'GET', base + '/widget.js?ref=' + encodeURIComponent(gh.branch));
+  if (!cfg || !js) throw new Error('config.json ou widget.js introuvable pour "' + id + '"');
+  return {
+    cfgText: b64decodeUtf8(cfg.content), jsText: b64decodeUtf8(js.content),
+    cfgSha: cfg.sha, jsSha: js.sha
+  };
+}
+
+// Creates or updates both files for one widget in a single call each.
+// Pass sha=null to create a new file; pass the sha ghLoadWidget returned to
+// update that same file.
+async function ghSaveWidget(gh, id, cfgText, jsText, cfgSha, jsSha){
+  var base = '/contents/' + encodeURIComponent(gh.path) + '/' + encodeURIComponent(id);
+  var verb = cfgSha || jsSha ? 'update' : 'create';
+  var cfgRes = await ghApi(gh, 'PUT', base + '/config.json', {
+    message: 'Widget Studio: ' + verb + ' ' + id + '/config.json',
+    content: b64encodeUtf8(cfgText), sha: cfgSha || undefined, branch: gh.branch
+  });
+  var jsRes = await ghApi(gh, 'PUT', base + '/widget.js', {
+    message: 'Widget Studio: ' + verb + ' ' + id + '/widget.js',
+    content: b64encodeUtf8(jsText), sha: jsSha || undefined, branch: gh.branch
+  });
+  return {cfgSha: cfgRes.content.sha, jsSha: jsRes.content.sha};
+}
+
+/* ----------------------------- Error boundary ----------------------------- */
+function ErrorBoundary(props){ return props.children; }
+ErrorBoundary.prototype = Object.create(React.Component.prototype);
+function EB(props){ React.Component.call(this, props); this.state = {err: null}; }
+EB.prototype = Object.create(React.Component.prototype);
+EB.prototype.constructor = EB;
+EB.getDerivedStateFromError = function(e){ return {err: e}; };
+EB.prototype.render = function(){
+  if (this.state.err) return h('div', {style:{color:'#ff6b6b',fontFamily:'monospace',fontSize:12,padding:12}},
+    'Erreur au rendu : ' + (this.state.err.message || String(this.state.err)));
+  return this.props.children;
+};
+
+/* --------------------------------- Templates -------------------------------- */
+var TEMPLATES = {
+  blank: {
+    name: 'Vide (minimal)',
+    config: JSON.stringify({id:'mon-widget', title:'Mon widget', description:'', iconId:'app_welcome', size:1}, null, 2),
+    js:
+"(function (wh) {\n" +
+"  var ce = wh.React.createElement;\n" +
+"  function MonWidget(props) {\n" +
+"    var cfg = props.config || {};\n" +
+"    return ce(wh.View, { style: { flex: 1, padding: 16, backgroundColor: '#17191ef0', borderRadius: 16 } },\n" +
+"      ce(wh.Title, { iconId: cfg.iconId }, cfg.title || 'Mon widget'),\n" +
+"      ce(wh.Label, { style: { marginTop: 8 } }, 'Largeur: ' + props.width + ' Hauteur: ' + props.height)\n" +
+"    );\n" +
+"  }\n" +
+"  wh.register(MonWidget);\n" +
+"})(globalThis.__wh);\n"
+  },
+  focusable: {
+    name: 'Liste (Focusable)',
+    config: JSON.stringify({id:'ma-liste', title:'Ma liste', iconId:'game', size:1}, null, 2),
+    js:
+"(function (wh) {\n" +
+"  var ce = wh.React.createElement;\n" +
+"  var ITEMS = ['Premier jeu', 'Deuxieme jeu', 'Troisieme jeu'];\n" +
+"  function Row(props) {\n" +
+"    return ce(wh.Focusable, {\n" +
+"      onPress: props.onPress,\n" +
+"      style: { paddingVertical: 6, paddingHorizontal: 8, borderRadius: 8 },\n" +
+"      focusedStyle: { backgroundColor: '#ffffff1f' }\n" +
+"    }, function (selected) {\n" +
+"      return ce(wh.Label, null, (selected ? '> ' : '  ') + props.label);\n" +
+"    });\n" +
+"  }\n" +
+"  function MaListe(props) {\n" +
+"    var cfg = props.config || {};\n" +
+"    return ce(wh.View, { style: { flex: 1, padding: 16, backgroundColor: '#17191ef0', borderRadius: 16 } },\n" +
+"      ce(wh.Title, { iconId: cfg.iconId }, cfg.title || 'Ma liste'),\n" +
+"      ITEMS.map(function (label, i) {\n" +
+"        return ce(Row, { key: i, label: label, onPress: function () { wh.log('press: ' + label); } });\n" +
+"      })\n" +
+"    );\n" +
+"  }\n" +
+"  wh.register(MaListe);\n" +
+"})(globalThis.__wh);\n"
+  },
+  horloge: {
+    name: 'Horloge (exemple complet)',
+    config: JSON.stringify({
+      id:'horloge', title:'Horloge', description:'Horloge numerique ou analogique.',
+      iconId:'date_time', size:1,
+      settings:[
+        {id:'mode', title:"Type d'horloge", type:'choice', options:[{value:'digital',label:'Numerique'},{value:'analog',label:'Analogique'}], default:'digital'},
+        {id:'format', title:'Format (numerique)', type:'choice', options:[{value:'24',label:'24h'},{value:'12',label:'12h'}], default:'24'},
+        {id:'dial', title:'Cadran (analogique)', type:'choice', options:[{value:'simple',label:'Simple'},{value:'graduated',label:'Gradue'},{value:'numbers',label:'Chiffres'}], default:'graduated'},
+        {id:'seconds', title:'Afficher les secondes', type:'toggle', default:true}
+      ]
+    }, null, 2),
+    js: "" /* filled in below from HORLOGE_JS */
+  }
+};
+var HORLOGE_JS = String.raw`(function (wh) {
+  var React = wh.React;
+  var View = wh.View;
+  var Label = wh.Label;
+  var ce = React.createElement;
+  var MAT = '#17191ef0';
+
+  var styles = wh.StyleSheet.create({
+    card: { borderRadius: 16, overflow: 'hidden' },
+    mat: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: MAT, borderRadius: 16 },
+    body: { flex: 1, padding: 16 },
+    clockArea: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+    digital: { textAlign: 'center' },
+    centerDot: { position: 'absolute', borderRadius: 999, backgroundColor: '#ffffff' },
+    hand: { position: 'absolute' },
+    tickWrap: { position: 'absolute' },
+    numeral: { position: 'absolute', textAlign: 'center' }
+  });
+
+  var FSIZES = [15, 18, 21, 24, 27, 30, 36, 45, 54, 72];
+  function pickDigitalFontSize(boxW, boxH, chars) {
+    var best = FSIZES[0];
+    for (var i = 0; i < FSIZES.length; i++) {
+      var fs = FSIZES[i];
+      if (fs * 1.3 <= boxH && fs * 0.62 * chars <= boxW) best = fs; else break;
+    }
+    return best;
+  }
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+
+  function DigitalClock(props) {
+    var d = props.date;
+    var use12 = props.format === '12';
+    var hr = d.getHours(), ampm = '';
+    if (use12) { ampm = hr < 12 ? ' AM' : ' PM'; hr = hr % 12 || 12; }
+    var text = (use12 ? hr : pad(hr)) + ':' + pad(d.getMinutes()) + (props.showSeconds ? ':' + pad(d.getSeconds()) : '') + ampm;
+    var fs = pickDigitalFontSize(props.boxW, props.boxH, text.length);
+    return ce(Label, { style: [styles.digital, { fontSize: fs }] }, text);
+  }
+
+  function Hand(props) {
+    var radius = Math.round(props.radius);
+    var size = radius * 2;
+    var thickness = Math.max(2, Math.round(props.thickness));
+    var length = Math.max(thickness, Math.round(props.length));
+    return ce(View, { style: [styles.hand, { left: Math.round(props.cx) - radius, top: Math.round(props.cy) - radius, width: size, height: size, transform: [{ rotate: props.angle + 'deg' }] }] },
+      ce(View, { style: { position: 'absolute', left: radius - Math.round(thickness / 2), top: radius - length, width: thickness, height: length, borderRadius: Math.round(thickness / 2), backgroundColor: props.color } })
+    );
+  }
+  function Tick(props) {
+    var radius = Math.round(props.radius);
+    var size = radius * 2;
+    return ce(View, { style: [styles.tickWrap, { left: Math.round(props.cx) - radius, top: Math.round(props.cy) - radius, width: size, height: size, transform: [{ rotate: props.angle + 'deg' }] }] },
+      (function () {
+        var thickness = Math.max(1, Math.round(props.thickness));
+        var len = Math.max(1, Math.round(props.len));
+        return ce(View, { style: { position: 'absolute', left: radius - Math.round(thickness / 2), top: Math.round(props.inset), width: thickness, height: len, borderRadius: Math.round(thickness / 2), backgroundColor: props.color } });
+      })()
+    );
+  }
+  function faceRing(r, cx, cy) {
+    r = Math.round(r); cx = Math.round(cx); cy = Math.round(cy);
+    var th = Math.max(3, Math.round(r * 0.035));
+    return [
+      ce(View, { key: 'ring', style: { position: 'absolute', left: cx - r, top: cy - r, width: r * 2, height: r * 2, borderRadius: r, backgroundColor: '#ffffff40' } }),
+      ce(View, { key: 'ringcut', style: { position: 'absolute', left: cx - r + th, top: cy - r + th, width: (r - th) * 2, height: (r - th) * 2, borderRadius: r - th, backgroundColor: MAT } })
+    ];
+  }
+  function faceTicks(r, cx, cy) {
+    var out = [];
+    for (var i = 0; i < 12; i++) {
+      var major = i % 3 === 0;
+      out.push(ce(Tick, { key: 't' + i, cx: cx, cy: cy, radius: r, angle: i * 30, inset: r * 0.06, len: major ? r * 0.14 : r * 0.08, thickness: major ? Math.max(3, r * 0.035) : Math.max(2, r * 0.02), color: major ? '#ffffff' : '#ffffff80' }));
+    }
+    return out;
+  }
+  function faceNumerals(r, cx, cy) {
+    var out = [];
+    var fs = r >= 70 ? 21 : r >= 50 ? 18 : 15;
+    var nr = r * 0.74;
+    for (var i = 1; i <= 12; i++) {
+      var ang = i * 30 * Math.PI / 180;
+      var x = cx + nr * Math.sin(ang), y = cy - nr * Math.cos(ang);
+      out.push(ce(Label, { key: 'n' + i, style: [styles.numeral, { left: x - 16, top: y - fs * 0.7, width: 32, fontSize: fs }] }, String(i)));
+    }
+    return out;
+  }
+
+  function AnalogClock(props) {
+    var d = props.date;
+    var r = Math.max(20, Math.floor(Math.min(props.boxW, props.boxH) / 2) - 4);
+    var cx = r, cy = r;
+    var h2 = d.getHours() % 12, m = d.getMinutes(), s = d.getSeconds(), ms = d.getMilliseconds();
+    var secFrac = s + ms / 1000;
+    var hourAngle = (h2 + m / 60) * 30, minAngle = (m + secFrac / 60) * 6, secAngle = secFrac * 6;
+    var dial = props.dial || 'graduated';
+    var kids = faceRing(r, cx, cy);
+    if (dial === 'graduated') kids = kids.concat(faceTicks(r, cx, cy));
+    else if (dial === 'numbers') kids = kids.concat(faceNumerals(r, cx, cy));
+    kids.push(ce(Hand, { key: 'h', cx: cx, cy: cy, radius: r, length: r * 0.5, thickness: Math.max(4, r * 0.09), color: '#ffffff', angle: hourAngle }));
+    kids.push(ce(Hand, { key: 'm', cx: cx, cy: cy, radius: r, length: r * 0.75, thickness: Math.max(3, r * 0.06), color: '#ffffff', angle: minAngle }));
+    if (props.showSeconds) kids.push(ce(Hand, { key: 's', cx: cx, cy: cy, radius: r, length: r * 0.85, thickness: Math.max(2, r * 0.025), color: '#ff5b5b', angle: secAngle }));
+    var dotR = Math.max(4, Math.round(r * 0.06));
+    kids.push(ce(View, { key: 'dot', style: [styles.centerDot, { left: Math.round(cx) - dotR, top: Math.round(cy) - dotR, width: dotR * 2, height: dotR * 2, borderRadius: dotR }] }));
+    return ce(View, { style: { width: Math.round(r) * 2, height: Math.round(r) * 2 } }, kids);
+  }
+
+  function Horloge(props) {
+    var s = React.useState(Date.now());
+    var now = s[0], setNow = s[1];
+    var mounted = React.useRef(true);
+    React.useEffect(function () {
+      mounted.current = true;
+      var id = setInterval(function () { if (mounted.current) setNow(Date.now()); }, 1000);
+      return function () { mounted.current = false; clearInterval(id); };
+    }, []);
+    var cfg = props.config || {};
+    var settings = props.settings || {};
+    var mode = settings.mode || 'digital';
+    var format = settings.format || '24';
+    var dial = settings.dial || 'graduated';
+    var showSeconds = settings.seconds !== false;
+    var W = props.width || 504, H = props.height || 152;
+    var boxW = Math.max(1, W - 32), boxH = Math.max(1, H - 32 - 40 - 8);
+    var d = new Date(now);
+    var clock = mode === 'analog'
+      ? ce(AnalogClock, { date: d, boxW: boxW, boxH: boxH, dial: dial, showSeconds: showSeconds })
+      : ce(DigitalClock, { date: d, boxW: boxW, boxH: boxH, format: format, showSeconds: showSeconds });
+    return ce(View, { style: [styles.card, { width: W, height: H }] },
+      ce(View, { lightMat: 'auto', style: styles.mat }),
+      ce(View, { style: styles.body },
+        ce(wh.Title, { iconId: cfg.iconId || 'date_time' }, cfg.title || 'Horloge'),
+        ce(View, { style: styles.clockArea }, clock)
+      )
+    );
+  }
+  wh.register(Horloge);
+})(globalThis.__wh);
+`;
+TEMPLATES.horloge.js = HORLOGE_JS;
+
+/* ----------------------------------- App ------------------------------------ */
+function App(){
+  var tplKey0 = 'horloge';
+  var st = React.useState('js'), tab = st[0], setTab = st[1];
+  var st2 = React.useState(TEMPLATES[tplKey0].js), jsText = st2[0], setJsText = st2[1];
+  var st3 = React.useState(TEMPLATES[tplKey0].config), cfgText = st3[0], setCfgText = st3[1];
+  var st4 = React.useState(1), sizeKey = st4[0], setSizeKey = st4[1];
+  var st5 = React.useState(true), focused = st5[0], setFocused = st5[1];
+  var st6 = React.useState(null), cfgErr = st6[0], setCfgErr = st6[1];
+  var st7 = React.useState(null), jsErr = st7[0], setJsErr = st7[1];
+  var st8 = React.useState({}), settingsState = st8[0], setSettingsState = st8[1];
+  var st9 = React.useState([]), logLines = st9[0], setLogLines = st9[1];
+  var st10 = React.useState(0), renderTick = st10[0], setRenderTick = st10[1];
+
+  var stg1 = React.useState(ghLoadSettings()), gh = stg1[0], setGh = stg1[1];
+  var stg2 = React.useState([]), ghList = stg2[0], setGhList = stg2[1];
+  var stg3 = React.useState(''), ghSelected = stg3[0], setGhSelected = stg3[1];
+  var stg4 = React.useState(false), ghBusy = stg4[0], setGhBusy = stg4[1];
+  var stg5 = React.useState(null), ghLoaded = stg5[0], setGhLoaded = stg5[1]; // {id, cfgSha, jsSha} once a widget is loaded/saved
+
+  var pressHandlers = React.useRef({}).current;
+  var component = React.useRef(null);
+  var whRef = React.useRef(null);
+
+  function log(tag, msg){
+    setLogLines(function(prev){
+      var next = prev.concat([{t: new Date().toLocaleTimeString(), tag: tag, msg: String(msg)}]);
+      return next.slice(-80);
+    });
+  }
+
+  // Parse config.json whenever it changes; rebuild settings defaults,
+  // keeping any value the user already changed for an id that still exists.
+  var config = React.useMemo(function(){
+    try {
+      var c = JSON.parse(cfgText || '{}');
+      setCfgErr(null);
+      return c;
+    } catch (e) {
+      setCfgErr(e.message);
+      return null;
+    }
+  }, [cfgText]);
+
+  React.useEffect(function(){
+    if (!config) return;
+    var list = Array.isArray(config.settings) ? config.settings : [];
+    setSettingsState(function(prev){
+      var next = {};
+      for (var i = 0; i < list.length; i++){
+        var s = list[i];
+        if (!s || !s.id) continue;
+        if (prev.hasOwnProperty(s.id)) { next[s.id] = prev[s.id]; continue; }
+        if (s.type === 'toggle') next[s.id] = !!s['default'];
+        else { var opts = Array.isArray(s.options) ? s.options : [];
+          next[s.id] = (s['default'] !== undefined) ? s['default'] : (opts[0] ? opts[0].value : undefined); }
+      }
+      return next;
+    });
+  }, [config]);
+
+  // Re-evaluate widget.js whenever it (or the tab) changes, debounced.
+  React.useEffect(function(){
+    var t = setTimeout(function(){
+      pressHandlers.Enter = pressHandlers.Back = pressHandlers.Square = pressHandlers.Triangle =
+        pressHandlers.Options = pressHandlers.L = pressHandlers.R = [];
+      component.current = null;
+      var wh = makeWH({
+        pressHandlers: pressHandlers,
+        log: log,
+        onRegister: function(C){ component.current = C; }
+      });
+      whRef.current = wh;
+      globalThis.__wh = wh;
+      try {
+        new Function(jsText)();
+        setJsErr(null);
+      } catch (e) {
+        setJsErr(e.message);
+      }
+      setRenderTick(function(n){ return n + 1; });
+    }, 350);
+    return function(){ clearTimeout(t); };
+  }, [jsText]);
+
+  function pressButton(btn){
+    var list = pressHandlers[btn] || [];
+    for (var i = list.length - 1; i >= 0; i--){
+      try { if (list[i].ref.current) { list[i].ref.current(); break; } } catch (e) { log('error', e.message); }
+    }
+    log('button', btn + ' presse');
+  }
+
+  function loadTemplate(key){
+    var t = TEMPLATES[key];
+    if (!t) return;
+    setJsText(t.js);
+    setCfgText(t.config);
+    setSettingsState({});
+  }
+
+  // widget.js isn't a downloadable extension in this viewer's allowlist, so
+  // both buttons copy to the clipboard instead (works the same for either
+  // file, and the user pastes straight into their own repo).
+  function copyText(label, text){
+    (async function(){
+      try {
+        await navigator.clipboard.writeText(text);
+        log('clipboard', label + ' copie dans le presse-papiers.');
+      } catch (e) {
+        try {
+          var ta = document.createElement('textarea');
+          ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+          document.body.appendChild(ta); ta.focus(); ta.select();
+          document.execCommand('copy'); document.body.removeChild(ta);
+          log('clipboard', label + ' copie dans le presse-papiers.');
+        } catch (e2) {
+          log('error', 'Copie impossible : ' + (e2 && e2.message));
+        }
+      }
+    })();
+  }
+
+  function updateGh(patch){
+    setGh(function(prev){ var next = Object.assign({}, prev, patch); ghSaveSettings(next); return next; });
+  }
+
+  function ghReady(){ return gh.owner && gh.repo && gh.branch && gh.path; }
+
+  async function ghRefreshList(){
+    if (!ghReady()) { log('github', 'Renseigne owner/repo/branch/dossier avant de charger la liste.'); return; }
+    setGhBusy(true);
+    try {
+      var names = await ghListWidgets(gh);
+      setGhList(names);
+      log('github', names.length + ' widget(s) trouve(s) dans ' + gh.owner + '/' + gh.repo + '/' + gh.path + '.');
+    } catch (e) {
+      log('error', 'Liste GitHub : ' + e.message);
+    } finally { setGhBusy(false); }
+  }
+
+  async function ghOpenWidget(id){
+    if (!id || !ghReady()) return;
+    setGhBusy(true);
+    try {
+      var w = await ghLoadWidget(gh, id);
+      setCfgText(w.cfgText); setJsText(w.jsText); setSettingsState({});
+      setGhSelected(id);
+      setGhLoaded({id: id, cfgSha: w.cfgSha, jsSha: w.jsSha});
+      log('github', 'Widget "' + id + '" charge depuis GitHub.');
+    } catch (e) {
+      log('error', 'Chargement "' + id + '" : ' + e.message);
+    } finally { setGhBusy(false); }
+  }
+
+  function ghNewWidget(){
+    var id = window.prompt('Identifiant du nouveau widget (nom de dossier, ex: ma-liste) :', '');
+    if (!id) return;
+    id = id.trim();
+    if (!/^[A-Za-z0-9._-]+$/.test(id)) { log('error', "Identifiant invalide : lettres/chiffres/._- uniquement."); return; }
+    var t = TEMPLATES.blank;
+    setCfgText(t.config.replace('mon-widget', id));
+    setJsText(t.js);
+    setSettingsState({});
+    setGhSelected(id);
+    setGhLoaded(null); // no sha yet: next save creates the files
+    log('github', 'Nouveau widget "' + id + '" pret a etre enregistre.');
+  }
+
+  async function ghSaveCurrent(){
+    var id = ghSelected || (ghLoaded && ghLoaded.id);
+    if (!id) { log('error', 'Choisis "Nouveau widget..." ou charge-en un avant d\'enregistrer.'); return; }
+    if (!ghReady()) { log('github', 'Renseigne owner/repo/branch/dossier avant d\'enregistrer.'); return; }
+    if (!gh.token) { log('error', "Un token GitHub (droits d'ecriture sur ce depot) est requis pour enregistrer."); return; }
+    if (cfgErr) { log('error', "config.json invalide, corrige-le avant d'enregistrer."); return; }
+    setGhBusy(true);
+    try {
+      var sameId = ghLoaded && ghLoaded.id === id;
+      var res = await ghSaveWidget(gh, id, cfgText, jsText, sameId ? ghLoaded.cfgSha : null, sameId ? ghLoaded.jsSha : null);
+      setGhLoaded({id: id, cfgSha: res.cfgSha, jsSha: res.jsSha});
+      log('github', 'Widget "' + id + '" enregistre sur ' + gh.owner + '/' + gh.repo + ' (branche ' + gh.branch + ').');
+      ghRefreshList();
+    } catch (e) {
+      log('error', 'Enregistrement "' + id + '" : ' + e.message);
+    } finally { setGhBusy(false); }
+  }
+
+  var dims = SIZE_DIMS[sizeKey] || SIZE_DIMS[1];
+  var settingsList = (config && Array.isArray(config.settings)) ? config.settings : [];
+
+  var preview = null;
+  if (jsErr) {
+    preview = h('div', {className:'err'}, 'Erreur dans widget.js :\n' + jsErr);
+  } else if (!component.current) {
+    preview = h('div', {className:'err'}, "Le widget n'a pas appele wh.register(Component).");
+  } else if (!config) {
+    preview = h('div', {className:'err'}, 'config.json invalide :\n' + cfgErr);
+  } else {
+    var props = {
+      config: config, settings: settingsState, focused: focused, active: false,
+      editing: false, size: sizeKey, width: dims[0], height: dims[1]
+    };
+    preview = h(EB, {key: renderTick}, h(component.current, props));
+  }
+
+  return h('div', {className:'app'},
+    h('div', {className:'col left'},
+      h('h1', null, 'PS5 Widget Studio', h('span', {className:'badge'}, 'apercu non officiel')),
+      h('div', {className:'toolbar'},
+        h('select', {onChange: function(e){ loadTemplate(e.target.value); }, defaultValue: tplKey0},
+          Object.keys(TEMPLATES).map(function(k){ return h('option', {key:k, value:k}, TEMPLATES[k].name); })
+        ),
+        h('button', {onClick: function(){ copyText('widget.js', jsText); }}, 'Copier widget.js'),
+        h('button', {onClick: function(){ copyText('config.json', cfgText); }}, 'Copier config.json')
+      ),
+      h('div', {className:'ghbox'},
+        h('p', {className:'ghnote'},
+          'Depot GitHub -- liste/charge/enregistre les widgets directement (API Contents). ' +
+          'Le token reste dans ce navigateur (localStorage), jamais ailleurs qu\'api.github.com. ' +
+          'Lecture seule possible sans token sur un depot public ; enregistrer demande un token avec acces en ecriture sur CE depot.'
+        ),
+        h('div', {className:'ghrow'},
+          h('input', {className:'owner', placeholder:'owner', value: gh.owner, onChange: function(e){ updateGh({owner: e.target.value}); }}),
+          h('span', null, '/'),
+          h('input', {className:'repo', placeholder:'repo', value: gh.repo, onChange: function(e){ updateGh({repo: e.target.value}); }}),
+          h('input', {className:'branch', placeholder:'branche', value: gh.branch, onChange: function(e){ updateGh({branch: e.target.value}); }}),
+          h('input', {className:'path', placeholder:'dossier (sample-widgets)', value: gh.path, onChange: function(e){ updateGh({path: e.target.value}); }})
+        ),
+        h('div', {className:'ghrow'},
+          h('input', {className:'token', type:'password', placeholder:'token GitHub (ecriture, optionnel pour lire)', value: gh.token, onChange: function(e){ updateGh({token: e.target.value}); }}),
+          h('button', {disabled: ghBusy, onClick: ghRefreshList}, 'Charger la liste'),
+          h('button', {disabled: ghBusy, onClick: ghNewWidget}, 'Nouveau widget...')
+        ),
+        h('div', {className:'ghrow'},
+          h('select', {value: ghSelected, onChange: function(e){ ghOpenWidget(e.target.value); }},
+            h('option', {value:''}, ghList.length ? '-- choisir un widget --' : '(charge la liste d\'abord)'),
+            ghList.map(function(id){ return h('option', {key:id, value:id}, id); })
+          ),
+          h('button', {className:'primary', disabled: ghBusy, onClick: ghSaveCurrent},
+            ghLoaded ? 'Enregistrer sur GitHub' : 'Creer sur GitHub')
+        )
+      ),
+      h('div', {className:'tabs'},
+        h('div', {className:'tab' + (tab === 'js' ? ' active' : ''), onClick: function(){ setTab('js'); }}, 'widget.js'),
+        h('div', {className:'tab' + (tab === 'cfg' ? ' active' : ''), onClick: function(){ setTab('cfg'); }}, 'config.json')
+      ),
+      cfgErr && tab === 'cfg' ? h('div', {className:'err'}, 'JSON invalide : ' + cfgErr) : null,
+      tab === 'js'
+        ? h('textarea', {value: jsText, onChange: function(e){ setJsText(e.target.value); }, spellCheck:false})
+        : h('textarea', {value: cfgText, onChange: function(e){ setCfgText(e.target.value); }, spellCheck:false})
+    ),
+    h('div', {className:'col right'},
+      h('div', {className:'controls'},
+        h('label', null, 'Taille',
+          h('select', {value: sizeKey, onChange: function(e){ setSizeKey(Number(e.target.value)); }},
+            h('option', {value:1}, 'DEFAULT (504x152)'),
+            h('option', {value:2}, 'LARGE (504x328)'),
+            h('option', {value:3}, 'FULL (504x504)')
+          )
+        ),
+        h('label', null,
+          h('input', {type:'checkbox', checked: focused, onChange: function(e){ setFocused(e.target.checked); }}),
+          'Widget en focus'
+        )
+      ),
+      h('div', {className:'stage'}, preview),
+      h('div', {className:'pad'},
+        ['Enter','Back','Square','Triangle','Options','L','R'].map(function(b){
+          return h('button', {key:b, onClick: function(){ pressButton(b); }}, b);
+        })
+      ),
+      h('div', {className:'hint'}, 'Croix=Enter, Rond=Back, Carre=Square, Triangle=Triangle, Start=Options, L1=L, R1=R. Simule le dernier wh.onPressed() enregistre pour ce bouton.'),
+      settingsList.length ? h('div', {className:'settingsbox'},
+        h('h3', null, 'Reglages (menu Options sur console)'),
+        settingsList.map(function(s){
+          if (!s || !s.id) return null;
+          if (s.type === 'toggle') {
+            return h('div', {className:'setting-row', key:s.id},
+              h('span', null, s.title || s.id),
+              h('input', {type:'checkbox', checked: !!settingsState[s.id],
+                onChange: function(e){ setSettingsState(Object.assign({}, settingsState, {[s.id]: e.target.checked})); }})
+            );
+          }
+          var opts = Array.isArray(s.options) ? s.options : [];
+          return h('div', {className:'setting-row', key:s.id},
+            h('span', null, s.title || s.id),
+            h('select', {value: settingsState[s.id], onChange: function(e){
+                setSettingsState(Object.assign({}, settingsState, {[s.id]: e.target.value})); }},
+              opts.map(function(o){ return h('option', {key:String(o.value), value:o.value}, o.label || String(o.value)); })
+            )
+          );
+        })
+      ) : null,
+      h('div', {className:'log'},
+        logLines.length ? logLines.map(function(l,i){ return h('div', {className:'line', key:i}, '[' + l.t + '] (' + l.tag + ') ' + l.msg); })
+          : h('div', {className:'line'}, "wh.log(...) s'affichera ici.")
+      )
+    )
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>
