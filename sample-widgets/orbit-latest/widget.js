@@ -131,11 +131,10 @@
     // cover mode is the one layout that skips the card's own padded body
     // (the image fills the tile edge to edge), so without this it had no
     // "Orbit Store" branding at all, unlike every stock Welcome Hub widget.
-    // Needs its own dark backdrop (the cover image underneath is arbitrary
-    // game art, not the mat) for the logo/title to stay legible.
-    coverHeader: { position: 'absolute', left: 0, right: 0, top: 0, backgroundColor: '#000000a0',
-                   paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8,
-                   borderTopLeftRadius: 16, borderTopRightRadius: 16 },
+    // No backdrop here on purpose: just the logo+title floating over the
+    // jaquette, like the top-left corner of the other sizes.
+    coverHeader: { position: 'absolute', left: 0, right: 0, top: 0,
+                   paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8 },
     coverDots: { flexDirection: 'row', justifyContent: 'center', marginTop: 6 },
     coverDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#ffffff40', marginHorizontal: 3 },
     coverDotActive: { backgroundColor: '#ffffff', width: 16 }
