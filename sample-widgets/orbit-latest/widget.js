@@ -123,10 +123,11 @@
     // cover Image, so the corners match the tile's 16px radius reliably.
     coverFill: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 16, overflow: 'hidden' },
     coverPlaceholderFull: { backgroundColor: '#263a58', alignItems: 'center', justifyContent: 'center' },
-    coverOverlay: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: '#000000a0',
-                    paddingHorizontal: 16, paddingTop: 8, paddingBottom: 10,
-                    borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
-    coverTitle: { color: '#ffffff' },
+    // No backdrop here either (same choice as coverHeader below): just the
+    // "i / n" progress counter floating over the jaquette, bottom-right.
+    coverOverlay: { position: 'absolute', right: 0, bottom: 0,
+                    paddingHorizontal: 16, paddingBottom: 8 },
+    coverProgress: { color: '#ffffff', fontSize: F.Size3XSmall },
     // Logo + title strip, top-left, same as list/grid's wh.Title header --
     // cover mode is the one layout that skips the card's own padded body
     // (the image fills the tile edge to edge), so without this it had no
@@ -134,10 +135,7 @@
     // No backdrop here on purpose: just the logo+title floating over the
     // jaquette, like the top-left corner of the other sizes.
     coverHeader: { position: 'absolute', left: 0, right: 0, top: 0,
-                   paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8 },
-    coverDots: { flexDirection: 'row', justifyContent: 'center', marginTop: 6 },
-    coverDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#ffffff40', marginHorizontal: 3 },
-    coverDotActive: { backgroundColor: '#ffffff', width: 16 }
+                   paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8 }
   });
 
   // A per-game catalog row: X (or press) launches Orbit Store. wh.Focusable
@@ -192,17 +190,10 @@
       });
   }
 
-  // The PS Store-style pagination strip under a full-tile cover: a dot per
-  // game, the current one wider and solid. Falls back to "i / n" past a
-  // dozen games so the strip never outgrows the tile.
-  function CoverDots(props) {
-    if (props.total > 12)
-      return ce(Label, { style: [styles.small, styles.dim, { marginTop: 8, textAlign: 'center' }] },
-        (props.index + 1) + ' / ' + props.total);
-    var dots = [];
-    for (var i = 0; i < props.total; i++)
-      dots.push(ce(View, { key: i, style: [styles.coverDot, i === props.index ? styles.coverDotActive : null] }));
-    return ce(View, { style: styles.coverDots }, dots);
+  // Pagination counter under a full-tile cover, e.g. "1 / 201" -- no title,
+  // no backdrop, just the current position in the catalog.
+  function CoverProgress(props) {
+    return ce(Label, { style: styles.coverProgress }, (props.index + 1) + ' / ' + props.total);
   }
 
   function OrbitLatest(props) {
@@ -397,10 +388,9 @@
       ce(View, { style: styles.coverHeader },
         ce(wh.Title, { iconId: cfg.iconId || 'game', style: { height: 28 } }, cfg.title || 'Orbit Store')
       ),
-      ce(View, { style: styles.coverOverlay },
-        ce(Label, { style: [styles.body18, styles.coverTitle], numberOfLines: 1 }, String(item.title || item.titleId || '?')),
-        allItems.length > 1 ? ce(CoverDots, { index: index, total: allItems.length }) : null
-      )
+      allItems.length > 1
+        ? ce(View, { style: styles.coverOverlay }, ce(CoverProgress, { index: index, total: allItems.length }))
+        : null
     );
   }
 
