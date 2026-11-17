@@ -437,22 +437,23 @@
     );
   }
 
+  // DEFAULT ne fait que 152px de haut (120px une fois la marge du corps
+  // retiree) : pas assez pour un en-tete + une rangee "temp/icone" + une
+  // rangee horaire empiles (c'est ce qui causait le chevauchement de texte
+  // -- un flex:1 au milieu, coince entre deux rangees deja trop hautes pour
+  // la place disponible, ne peut que deborder). Ici tout tient sur UNE
+  // seule rangee, sans flex:1, avec des tailles choisies pour que le total
+  // (~80px) reste nettement sous les 120px disponibles.
   function DefaultView(props) {
-    var hours = nextHours(props.data, 4);
-    return ce(View, { style: { flex: 1 } },
-      ce(Header, { city: props.cityLabel, cond: props.cond, hl: props.hl }),
-      ce(View, { style: [styles.row, { flex: 1, justifyContent: 'space-between' }] },
-        ce(Label, { style: { fontSize: F.Size2XLarge } }, props.tempStr),
-        ce(WeatherIcon, { group: props.group, isDay: props.isDay, size: 56 })
+    return ce(View, { style: [styles.row, { flex: 1, justifyContent: 'space-between', alignItems: 'center' }] },
+      ce(View, null,
+        ce(Label, { style: [styles.city, { fontSize: F.Size3XSmall }] }, props.cityLabel),
+        ce(Label, { style: { fontSize: F.SizeXLarge, marginTop: 2 } }, props.tempStr)
       ),
-      ce(View, { style: [styles.row, { justifyContent: 'space-between' }] },
-        hours.map(function (h, i) {
-          return ce(View, { key: i, style: styles.hourCol },
-            ce(Label, { style: { fontSize: F.Size4XSmall, opacity: 0.6 } }, h.hour),
-            ce(WeatherIcon, { group: wmoGroup(h.code), isDay: props.isDay, size: 22 }),
-            ce(Label, { style: { fontSize: F.Size3XSmall } }, fmtTemp(h.temp, props.unit))
-          );
-        })
+      ce(View, { style: { alignItems: 'flex-end' } },
+        ce(WeatherIcon, { group: props.group, isDay: props.isDay, size: 48 }),
+        ce(Label, { style: [styles.cond, { fontSize: F.Size4XSmall, marginTop: 2 }] }, props.cond),
+        ce(Label, { style: [styles.hl, { fontSize: F.Size4XSmall }] }, props.hl)
       )
     );
   }
