@@ -1,14 +1,14 @@
 ## Outil : éditer / créer les widgets
 
-[**Ouvrir le PS5 Widget Studio**](https://htmlpreview.github.io/?https://raw.githubusercontent.com/TOSanthony/dashboard/main/tools/widget-studio.html)
+[**Ouvrir le PS5 Widget Studio**](https://tosanthony.github.io/dashboard/tools/widget-studio.html)
 -- édite `config.json`/`widget.js`, prévisualise (tailles DEFAULT/LARGE/FULL,
 popup de réglages), et charge/enregistre directement les widgets de ce
 dépôt (lecture sans jeton, écriture avec un jeton GitHub à grain fin).
 
-Le fichier source est dans [`tools/widget-studio.html`](tools/widget-studio.html).
-Pour une URL plus stable, active GitHub Pages sur ce dépôt (Settings ->
-Pages -> branche `main`) : l'outil sera alors sur
-`https://tosanthony.github.io/dashboard/tools/widget-studio.html`.
+Ce lien suppose GitHub Pages activé sur ce dépôt (Settings -> Pages ->
+Source : branche `main`, dossier `/ (root)`) -- à faire une fois si ce
+n'est pas déjà le cas. Le fichier source est sinon dans
+[`tools/widget-studio.html`](tools/widget-studio.html).
 
 # wh_bridge.elf -- structure en plusieurs fichiers
 
