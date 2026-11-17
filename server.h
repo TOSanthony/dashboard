@@ -19,6 +19,7 @@
 #define WH_ASSET_MAX  (1024*1024)
 #define WH_ASSET_URL  "http://127.0.0.1:8098/"
 #define WH_GEN_FILE   WH_WIDGETS_DIR "/.wh_gen"
+#define WH_WATCH_SECS 5   /* how often the background widget-folder watcher re-hashes */
 
 /* Binds the asset port and bumps the generation counter (telling any older
  * running server to retire). Returns the listening socket, or -1 with *why
@@ -26,7 +27,19 @@
 int wh_asset_open(unsigned* gen, const char** why);
 
 /* Serves connections on `s` until a newer install bumps the generation past
- * `my`; never returns (exits the process on handover). */
-void wh_asset_loop(int s, unsigned my);
+ * `my`; never returns (exits the process on handover).
+ *
+ * Also watches WH_WIDGETS_DIR in the background: every WH_WATCH_SECS, it
+ * cheaply re-hashes every widget's id+config.json+widget.js (build_prelude's
+ * generation hash, no ptrace involved) and, if it differs from `start_gen`
+ * (the generation baked into the cave when this process started), re-finds
+ * `target` ("SceShellUI", in case it respawned) and re-runs the full install
+ * -- the same re-attach/rewrite/re-point-the-vtable steps a manual re-run of
+ * wh_bridge.elf does -- so adding/editing/removing a widget on disk takes
+ * effect on its own, with no relaunch needed. This only keeps the cave's
+ * *content* fresh; whether ShellUI's own JS re-evaluates that content on its
+ * own, or only the next time you leave/re-enter the Hub screen (or sign out/
+ * in), is a separate, unconfirmed question -- see the README. */
+void wh_asset_loop(int s, unsigned my, pid_t target, uint64_t start_gen);
 
 #endif /* WH_SERVER_H */

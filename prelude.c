@@ -47,7 +47,7 @@ static void wh_fail_add(const char* name){
   strcat(g_wfail, name);
 }
 
-void build_prelude(char** outbuf, size_t* outlen){
+void build_prelude(char** outbuf, size_t* outlen, uint64_t* gen_out){
   size_t cap = 16384, len = 0;
   char* out = (char*)malloc(cap); out[0] = 0;
   /* Widget sections are built into their own buffer so their combined bytes
@@ -137,6 +137,7 @@ void build_prelude(char** outbuf, size_t* outlen){
    * not guaranteed across runs; that only flips the hash needlessly on an
    * unrelated run, never missing a real change, so it's fine for this). */
   uint64_t gen = fnv1a64((const uint8_t*)wbuf, wlen);
+  if (gen_out) *gen_out = gen;
   char genhex[20]; snprintf(genhex, sizeof genhex, "%016llx", (unsigned long long)gen);
   WHAPP(wh_loader);
   /* If this generation differs from the one already loaded in this JS

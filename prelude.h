@@ -13,7 +13,11 @@ extern char g_wfail[200];
 
 /* Scans WH_WIDGETS_DIR and returns a malloc'd, NUL-terminated JS prelude in
  * outbuf/outlen (caller frees *outbuf). Never fails: a widget with no/bad
- * config.json or widget.js is skipped and logged, not fatal. */
-void build_prelude(char** outbuf, size_t* outlen);
+ * config.json or widget.js is skipped and logged, not fatal.
+ * If gen_out is non-NULL, *gen_out gets the generation hash (see prelude.c's
+ * hot-reload note) -- a cheap way to ask "did any widget's id/config.json/
+ * widget.js change on disk?" without the ptrace install that normally comes
+ * with building a prelude; used by the background watcher in server.c. */
+void build_prelude(char** outbuf, size_t* outlen, uint64_t* gen_out);
 
 #endif /* WH_PRELUDE_H */

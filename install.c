@@ -14,6 +14,9 @@ extern const uint8_t bridge_hbc_start[];
 extern const uint8_t bridge_hbc_end[];
 
 int wh_install_once(pid_t pid, int want_dump, int* reload_out){
+  return wh_install_once_g(pid, want_dump, reload_out, 0);
+}
+int wh_install_once_g(pid_t pid, int want_dump, int* reload_out, uint64_t* gen_out){
   *reload_out = 0;
   size_t blen = (size_t)(bridge_hbc_end - bridge_hbc_start);
   uint64_t bhash = fnv1a64(bridge_hbc_start, blen);
@@ -21,7 +24,7 @@ int wh_install_once(pid_t pid, int want_dump, int* reload_out){
       bridge_hbc_start[0],bridge_hbc_start[1],bridge_hbc_start[2],bridge_hbc_start[3]);
   if (blen < 0x100000) return 1;
   char* prelude = 0; size_t plen = 0;
-  build_prelude(&prelude, &plen);
+  build_prelude(&prelude, &plen, gen_out);
   if (!prelude || !plen) { free(prelude); return 1; }
   size_t imgcap = CV_PRELUDE + plen + 1;
   size_t cavesz = (imgcap + 0xfff) & ~((size_t)0xfff);

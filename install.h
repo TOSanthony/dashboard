@@ -14,4 +14,11 @@
  * one means. */
 int wh_install_once(pid_t pid, int want_dump, int* reload_out);
 
+/* Same as wh_install_once, but also reports the widget generation hash that
+ * was just baked into the cave (see prelude.c's hot-reload note) when
+ * gen_out is non-NULL -- used by the background watcher in server.c so it
+ * knows, after re-installing, which generation is now live without a second
+ * disk scan. */
+int wh_install_once_g(pid_t pid, int want_dump, int* reload_out, uint64_t* gen_out);
+
 #endif /* WH_INSTALL_H */

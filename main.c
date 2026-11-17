@@ -36,7 +36,8 @@ int main(void){
   if (pid < 0) { notify("WHBridge failed: ShellUI not found"); return 1; }
   int want_dump = (access(WH_DUMP_FLAG, F_OK) == 0);   /* opt-in HBC dump diagnostics; WH_DUMP_FLAG from cave.h via install.h */
   int reload = 0;
-  int rc = wh_install_once(pid, want_dump, &reload);
+  uint64_t widgets_gen = 0;
+  int rc = wh_install_once_g(pid, want_dump, &reload, &widgets_gen);
   const char* hook = rc == 0 ? (reload ? "WHBridge reloaded" : "WHBridge loaded")
                   : rc == 15 ? "WHBridge failed: hook owned by something else" : "WHBridge failed";
   int plain = (rc == 0 || rc == 15);         /* message already says it all */
@@ -51,7 +52,7 @@ int main(void){
   if (as >= 0) {
     if (plain) notify("%s  v%s%s%s\nAsset server: running", hook, WH_VERSION, wsum, tsum);
     else notify("%s (rc=%d)  v%s%s\nAsset server: running", hook, rc, WH_VERSION, tsum);
-    wh_asset_loop(as, gen);                  /* does not return */
+    wh_asset_loop(as, gen, pid, widgets_gen); /* does not return */
   }
   if (plain) notify("%s  v%s%s%s\nAsset server: not running (%s)", hook, WH_VERSION, wsum, tsum, why);
   else notify("%s (rc=%d)  v%s%s\nAsset server: not running (%s)", hook, rc, WH_VERSION, tsum, why);

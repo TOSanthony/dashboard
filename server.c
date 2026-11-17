@@ -1,4 +1,6 @@
 #include "server.h"
+#include "install.h"
+#include "prelude.h"
 #include "util.h"
 
 static void wh_send_all(int c, const void* b, size_t n){
@@ -192,13 +194,45 @@ int wh_asset_open(unsigned* gen, const char** why){
   LOG("assets: serving %s on 127.0.0.1:%d (gen %u)\n", WH_WIDGETS_DIR, WH_ASSET_PORT, my);
   return s;
 }
+/* Cheap "did a widget change?" check: builds the prelude (pure file I/O --
+ * no ptrace) just to read off its generation hash, then throws the JS text
+ * away. Safe to call every few seconds from the resident loop. */
+static uint64_t wh_watch_rehash(void){
+  char* tmp = 0; size_t tlen = 0; uint64_t gen = 0;
+  build_prelude(&tmp, &tlen, &gen);
+  free(tmp);
+  return gen;
+}
+/* Re-finds SceShellUI (it can respawn) and re-runs the full install so the
+ * fresh widget content actually reaches it. Logs/notifies either way; never
+ * fatal to the asset server if it fails (next tick tries again). */
+static void wh_watch_reinstall(uint64_t new_gen, uint64_t* cur_gen){
+  pid_t pid = find_pid("SceShellUI");
+  if (pid < 0) { wh_flog("watch", "widgets changed but SceShellUI not found, will retry"); return; }
+  int reload = 0; uint64_t installed_gen = 0;
+  int rc = wh_install_once_g(pid, 0, &reload, &installed_gen);
+  if (rc == 0) {
+    *cur_gen = installed_gen;
+    wh_flog("watch", "widgets changed on disk: re-installed (gen %016llx)", (unsigned long long)installed_gen);
+    notify("WHBridge: widgets refreshed\nChange detected and re-installed automatically.");
+  } else {
+    wh_flog("watch", "widgets changed on disk but re-install failed (rc=%d), will retry", rc);
+    /* Don't update *cur_gen: keep retrying every tick until it succeeds,
+     * rather than silently giving up on this change. new_gen is unused on
+     * this path on purpose. */
+    (void)new_gen;
+  }
+}
 /* Serve until a newer install bumps the generation; never returns. */
-void wh_asset_loop(int s, unsigned my){
+void wh_asset_loop(int s, unsigned my, pid_t target, uint64_t start_gen){
   signal(SIGPIPE, SIG_IGN);
   fflush(stdout); fflush(stderr);
   int dn = open("/dev/null", O_RDWR);        /* detach stdio so the loader connection ends */
   if (dn >= 0) { dup2(dn, 0); dup2(dn, 1); dup2(dn, 2); if (dn > 2) close(dn); }
   struct timeval tv = { 2, 0 };
+  (void)target;   /* kept in the signature for clarity; the watcher re-resolves the pid itself */
+  uint64_t cur_gen = start_gen;
+  time_t last_watch = time(0);
   for (;;) {
     struct pollfd pf = { s, POLLIN, 0 };
     int pr = poll(&pf, 1, 1000);
@@ -206,6 +240,12 @@ void wh_asset_loop(int s, unsigned my){
       klog_printf("[wc] assets: gen %u superseded, retiring\n", my);
       wh_flog("assets", "server gen %u handed over to a newer install, exiting", my);
       close(s); _exit(0);
+    }
+    time_t now = time(0);
+    if (now - last_watch >= WH_WATCH_SECS) {
+      last_watch = now;
+      uint64_t h = wh_watch_rehash();
+      if (h != cur_gen) wh_watch_reinstall(h, &cur_gen);
     }
     if (pr <= 0) continue;
     int c = accept(s, 0, 0);

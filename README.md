@@ -109,11 +109,28 @@ sur l'id + `config.json` + `widget.js` de chaque widget trouvé sur le disque.
 
 Concrètement : éditer/ajouter un widget dans `/data/wh-widgets/`, puis
 relancer `wh_bridge.elf`, suffit à mettre à jour le registre de widgets côté
-JS -- sans attendre une nouvelle session ShellUI. Reste à confirmer sur
-console si le Welcome Hub affiche le changement dès le prochain rendu (par
-ex. en quittant/rouvrant l'écran du hub) ou si une reconnexion reste
-nécessaire pour que les tuiles déjà affichées se remontent avec la nouvelle
-définition -- seul un test sur la vraie console peut le dire.
+JS -- sans attendre une nouvelle session ShellUI.
+
+### Et sans même relancer le payload
+
+`wh_asset_loop()` (`server.c`), la boucle qui reste résidente (serveur
+d'assets), re-hash maintenant `/data/wh-widgets/` toutes les
+`WH_WATCH_SECS` (5 s) -- juste `build_prelude()` appelé pour son hash, sans
+le ptrace qui va avec une install complète, donc peu coûteux. Si le hash a
+changé depuis la dernière install (widget ajouté/modifié/supprimé sur le
+disque), le payload retrouve lui-même le PID de `SceShellUI` (au cas où il
+aurait redémarré) et relance l'install complète tout seul -- le même
+réattachement/réécriture/repointage de vtable qu'un lancement manuel de
+`wh_bridge.elf`. Une notification "widgets refreshed" confirme quand ça se
+produit.
+
+Donc en pratique : sauvegarder un widget modifié dans son dossier (par
+exemple depuis le Widget Studio, cf. plus haut) suffit, sans relancer quoi
+que ce soit sur la PS5. Ce que ça ne change pas : ce mécanisme ne garde
+frais que le *contenu* du cave (prélude + hash de génération) ; que le JS du
+hub réévalue ce contenu tout seul, ou seulement en quittant/rouvrant l'écran
+du Hub (ou après une reconnexion complète), reste la même question ouverte
+qu'avant -- seul un test sur la vraie console peut le dire.
 
 ## Fichiers
 
