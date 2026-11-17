@@ -4,7 +4,21 @@
  * per widget folder:
  *   __wh.__begin({id,title,iconId,description,size}); <widget.js verbatim>; __wh.__end();
  * widget.js is compiled as part of the prelude (Hermes release blocks in-JS
- * eval), so a syntax error in one widget breaks the set -- validate offline. */
+ * eval), so a syntax error in one widget breaks the set -- validate offline.
+ *
+ * Hot reload: every widget section is still guarded by
+ * `if(globalThis.__wh&&!globalThis.__wh.__loaded){...}` so repeated
+ * evaluateJavaScript calls on an UNCHANGED prelude never re-register widgets
+ * (that used to be a one-way latch: once __loaded was set, it stayed set for
+ * the life of the ShellUI JS runtime, so an edited or newly added widget only
+ * ever showed up after a full sign-out/sign-in). Now a hash of every widget's
+ * id+config.json+widget.js is embedded as `__wh.__gen`; when it differs from
+ * the generation already loaded in this JS runtime (because wh_bridge.elf was
+ * re-run after a widget was added/edited/removed on disk), the widget
+ * registry is cleared and __loaded is reset to 0, so the section below runs
+ * again and picks up the change -- without requiring a fresh console
+ * sign-out/sign-in, same as re-running the payload already did for the
+ * detour/bridge themselves. */
 #include "prelude.h"
 #include "server.h"   /* WH_ASSET_URL */
 #include "util.h"
@@ -36,7 +50,12 @@ static void wh_fail_add(const char* name){
 void build_prelude(char** outbuf, size_t* outlen){
   size_t cap = 16384, len = 0;
   char* out = (char*)malloc(cap); out[0] = 0;
-  WHAPP(wh_loader);
+  /* Widget sections are built into their own buffer so their combined bytes
+   * can be hashed into a generation id before being spliced into `out` --
+   * see the hot-reload note above. */
+  size_t wcap = 16384, wlen = 0;
+  char* wbuf = (char*)malloc(wcap); wbuf[0] = 0;
+#define WAPP(s) wh_app(&wbuf,&wlen,&wcap,(s),strlen(s))
   int count = 0;
   DIR* d = opendir(WH_WIDGETS_DIR);
   if (d){
@@ -81,28 +100,28 @@ void build_prelude(char** outbuf, size_t* outlen){
       wh_json_str(cfg,"iconFallback",iconFb,sizeof iconFb);
       double sz = wh_json_num(cfg,"size",1);
       char num[48]; snprintf(num, sizeof num, "',size:%g},'", sz);
-      WHAPP("\nif(globalThis.__wh&&!globalThis.__wh.__loaded){globalThis.__wh.__begin({id:'");
-      wh_app_esc(&out,&len,&cap, id);
-      WHAPP("',title:'");
-      wh_app_esc(&out,&len,&cap, title);
-      WHAPP("',iconId:'");
-      wh_app_esc(&out,&len,&cap, iconId);
-      WHAPP("',description:'");
-      wh_app_esc(&out,&len,&cap, desc);
-      WHAPP("',iconFallback:'");
-      wh_app_esc(&out,&len,&cap, iconFb);
+      WAPP("\nif(globalThis.__wh&&!globalThis.__wh.__loaded){globalThis.__wh.__begin({id:'");
+      wh_app_esc(&wbuf,&wlen,&wcap, id);
+      WAPP("',title:'");
+      wh_app_esc(&wbuf,&wlen,&wcap, title);
+      WAPP("',iconId:'");
+      wh_app_esc(&wbuf,&wlen,&wcap, iconId);
+      WAPP("',description:'");
+      wh_app_esc(&wbuf,&wlen,&wcap, desc);
+      WAPP("',iconFallback:'");
+      wh_app_esc(&wbuf,&wlen,&wcap, iconFb);
       if (dir_ok) {                          /* base URL for this widget's images */
-        WHAPP("',assetBase:'" WH_ASSET_URL);
-        wh_app_esc(&out,&len,&cap, e->d_name);
-        WHAPP("/");
+        WAPP("',assetBase:'" WH_ASSET_URL);
+        wh_app_esc(&wbuf,&wlen,&wcap, e->d_name);
+        WAPP("/");
       }
-      if (glyph[0]) { WHAPP("',glyph:'"); wh_app_esc(&out,&len,&cap, glyph); }
-      WHAPP(num);
-      wh_app_esc(&out,&len,&cap, cfg);       /* raw config.json; parsed by the loader */
-      WHAPP("');\n");
-      WHAPP("try{\n");
-      wh_app(&out,&len,&cap, js, jl);
-      WHAPP("\n}catch(e){globalThis.__wh.__fail(e);}\nglobalThis.__wh.__end();}\n");
+      if (glyph[0]) { WAPP("',glyph:'"); wh_app_esc(&wbuf,&wlen,&wcap, glyph); }
+      WAPP(num);
+      wh_app_esc(&wbuf,&wlen,&wcap, cfg);       /* raw config.json; parsed by the loader */
+      WAPP("');\n");
+      WAPP("try{\n");
+      wh_app(&wbuf,&wlen,&wcap, js, jl);
+      WAPP("\n}catch(e){globalThis.__wh.__fail(e);}\nglobalThis.__wh.__end();}\n");
       free(cfg); free(js); count++;
       LOG("widget: id=%s size=%g js=%zuB\n", id, sz, jl);
     }
@@ -110,11 +129,34 @@ void build_prelude(char** outbuf, size_t* outlen){
   } else {
     LOG("build_prelude: opendir(%s) failed\n", WH_WIDGETS_DIR);
   }
+  /* Generation id: a hash of every widget's exact id+config.json+widget.js
+   * bytes, in directory order. Appending/editing/removing a widget and
+   * re-running the payload changes this, which is what lets the check below
+   * tell a genuine change apart from the hub simply re-evaluating the same
+   * unchanged bundle again (readdir() order is stable within one run but
+   * not guaranteed across runs; that only flips the hash needlessly on an
+   * unrelated run, never missing a real change, so it's fine for this). */
+  uint64_t gen = fnv1a64((const uint8_t*)wbuf, wlen);
+  char genhex[20]; snprintf(genhex, sizeof genhex, "%016llx", (unsigned long long)gen);
+  WHAPP(wh_loader);
+  /* If this generation differs from the one already loaded in this JS
+   * runtime, drop the latch and the widget registry so the sections below
+   * run again and replace the stale entries -- see the hot-reload note
+   * above. Identical generation (the hub re-evaluating the same unchanged
+   * bundle) leaves everything untouched, same as before. */
+  WHAPP("\nif(globalThis.__wh){var __whg='");
+  WHAPP(genhex);
+  WHAPP("';if(globalThis.__wh.__gen!==__whg){globalThis.__wh.__gen=__whg;globalThis.__wh.__loaded=0;"
+        "globalThis.__wh_widgets={};globalThis.__wh_cfgs={};globalThis.__wh_order=[];}}\n");
+  wh_app(&out,&len,&cap, wbuf, wlen);
+  free(wbuf);
   /* mark loaded only after every section ran, so all widgets load in the
-   * first eval where the handle exists, and never re-run on later evals */
+   * first eval where the generation is new, and never re-run on later evals
+   * of that same generation */
   WHAPP("\nif(globalThis.__wh){globalThis.__wh.__loaded=1;globalThis.__wh.__flush();}\n");
   g_wok = count;
-  LOG("build_prelude: widgets=%d failed=%d total=%zuB\n", count, g_wbad, len);
+  LOG("build_prelude: widgets=%d failed=%d total=%zuB gen=%s\n", count, g_wbad, len, genhex);
   *outbuf = out; *outlen = len;
 }
 #undef WHAPP
+#undef WAPP

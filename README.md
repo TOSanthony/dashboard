@@ -75,6 +75,34 @@ du payload (widgets, tuiles) s'installe quand même normalement. Le résultat
 est ajouté à la notification de démarrage ("Clock: synced via NTP") et
 toujours journalisé dans `wh.log`.
 
+## Rechargement des widgets (ajout/modification sans reconnexion complète)
+
+`build_prelude()` (`prelude.c`) relit `/data/wh-widgets/` et régénère le JS
+injecté à **chaque lancement** du payload. Jusqu'ici, relancer `wh_bridge.elf`
+après avoir ajouté ou modifié un widget ne suffisait pas : une fois le JS
+du hub évalué une première fois dans sa session, un verrou (`__wh.__loaded`)
+empêchait toute section widget de se ré-exécuter, même si le hook était bien
+remplacé avec un prélude à jour -- d'où la nécessité d'une déconnexion/
+reconnexion complète pour qu'un changement apparaisse.
+
+Le prélude embarque maintenant un hash (`__wh.__gen`, FNV-1a 64 bits) calculé
+sur l'id + `config.json` + `widget.js` de chaque widget trouvé sur le disque.
+À chaque évaluation du JS par le hub :
+- si ce hash est identique à celui déjà chargé dans cette session JS (le hub
+  réévalue le même bundle sans rien de nouveau) : rien ne change, comme
+  avant (pas de doublons, pas de ré-enregistrement inutile) ;
+- si le hash a changé (le payload a été relancé après un ajout, une
+  modification ou une suppression de widget) : le registre de widgets est
+  vidé et reconstruit avec le contenu actuel du disque.
+
+Concrètement : éditer/ajouter un widget dans `/data/wh-widgets/`, puis
+relancer `wh_bridge.elf`, suffit à mettre à jour le registre de widgets côté
+JS -- sans attendre une nouvelle session ShellUI. Reste à confirmer sur
+console si le Welcome Hub affiche le changement dès le prochain rendu (par
+ex. en quittant/rouvrant l'écran du hub) ou si une reconnexion reste
+nécessaire pour que les tuiles déjà affichées se remontent avec la nouvelle
+définition -- seul un test sur la vraie console peut le dire.
+
 ## Fichiers
 
 | Fichier | Contenu |
