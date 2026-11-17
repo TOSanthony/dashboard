@@ -26,6 +26,17 @@
       "default": "24"
     },
     {
+      "id": "dial",
+      "title": "Cadran (analogique)",
+      "type": "choice",
+      "options": [
+        { "value": "simple", "label": "Simple" },
+        { "value": "graduated", "label": "Gradue" },
+        { "value": "numbers", "label": "Chiffres" }
+      ],
+      "default": "graduated"
+    },
+    {
       "id": "seconds",
       "title": "Afficher les secondes",
       "type": "toggle",
