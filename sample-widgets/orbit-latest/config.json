@@ -1,0 +1,23 @@
+{
+  "id": "orbit-latest",
+  "title": "Orbit Store",
+  "description": "Les derniers jeux ajoutes a Orbit Store.",
+  "glyph": "orbit.png",
+  "iconFallback": "game",
+  "hideKeyGuide": true,
+  "size": 1,
+  "settings": [
+    {
+      "id": "displayMode",
+      "title": "Mode d'affichage",
+      "type": "choice",
+      "options": [
+        { "value": "list", "label": "Liste" },
+        { "value": "grid", "label": "Grille" },
+        { "value": "cover", "label": "Jaquette plein ecran" }
+      ],
+      "default": "list"
+    }
+  ]
+}
+
