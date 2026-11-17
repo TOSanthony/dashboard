@@ -88,7 +88,13 @@
     body: { flex: 1, padding: 16 },
     row: { flexDirection: 'row', alignItems: 'center', borderRadius: 10, paddingHorizontal: 8 },
     rowFocused: { backgroundColor: '#ffffff1f' },
-    cover: { borderRadius: 6, marginRight: 10, backgroundColor: '#263a58' },
+    // overflow:'hidden' right here (not just borderRadius on the Image
+    // itself) is what actually clips the cover art to rounded corners --
+    // same finding as borderWidth/borderColor elsewhere in this widget:
+    // a style applied directly to an Image isn't trustworthy on this
+    // runtime, but a View wrapping it with overflow:hidden + matching
+    // borderRadius reliably clips whatever's inside, image included.
+    cover: { borderRadius: 6, marginRight: 10, backgroundColor: '#263a58', overflow: 'hidden' },
     coverPlaceholder: { alignItems: 'center', justifyContent: 'center' },
     dim: { opacity: 0.6 },
     small: { fontSize: F.Size4XSmall },   // 15
@@ -111,12 +117,25 @@
     gridLabelBar: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: '#000000a0', paddingHorizontal: 6, paddingVertical: 3 },
     // Cover mode: the image fills the whole card edge to edge (no gap from
     // the card's own padding), title/dots overlaid on a bottom strip.
-    coverFill: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+    // Same clipping note as `cover` above: don't rely on the card's own
+    // overflow:hidden several levels up (or on the Image's own borderRadius)
+    // -- clip right here, at the View that directly wraps the full-bleed
+    // cover Image, so the corners match the tile's 16px radius reliably.
+    coverFill: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 16, overflow: 'hidden' },
     coverPlaceholderFull: { backgroundColor: '#263a58', alignItems: 'center', justifyContent: 'center' },
     coverOverlay: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: '#000000a0',
                     paddingHorizontal: 16, paddingTop: 8, paddingBottom: 10,
                     borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
     coverTitle: { color: '#ffffff' },
+    // Logo + title strip, top-left, same as list/grid's wh.Title header --
+    // cover mode is the one layout that skips the card's own padded body
+    // (the image fills the tile edge to edge), so without this it had no
+    // "Orbit Store" branding at all, unlike every stock Welcome Hub widget.
+    // Needs its own dark backdrop (the cover image underneath is arbitrary
+    // game art, not the mat) for the logo/title to stay legible.
+    coverHeader: { position: 'absolute', left: 0, right: 0, top: 0, backgroundColor: '#000000a0',
+                   paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8,
+                   borderTopLeftRadius: 16, borderTopRightRadius: 16 },
     coverDots: { flexDirection: 'row', justifyContent: 'center', marginTop: 6 },
     coverDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#ffffff40', marginHorizontal: 3 },
     coverDotActive: { backgroundColor: '#ffffff', width: 16 }
@@ -264,13 +283,15 @@
     var compact = H < 300;              // DEFAULT (152)
     var pad = 32, titleH = 40, gap = 8;
     var innerW = W - pad, innerH = H - pad - titleH - gap;
+    var cfg = (props && props.config) || {};
 
     // Cover mode, once there's something to show: the cover fills the whole
     // tile edge to edge (no card padding, no separate header row) -- the
-    // title/dots sit on an overlay strip on top of the image instead.
+    // widget's own logo/title sit on a top overlay strip, the current
+    // game's title/dots on a bottom one, both over the image.
     if (mode === 'cover' && !data.loading && !data.error && total)
       return ce(View, { style: [styles.card, { width: W, height: H }] },
-        renderCoverFull(data.items, coverIndex, W, H));
+        renderCoverFull(data.items, coverIndex, W, H, cfg));
 
     var body;
     if (data.loading) {
@@ -285,7 +306,6 @@
       body = renderList(data.items, compact, innerH, openItem);
     }
 
-    var cfg = (props && props.config) || {};
     var badge = data.loading ? null : (total ? total + ' jeu' + (total === 1 ? '' : 'x') : null);
     var header = ce(wh.Title, { iconId: cfg.iconId || 'game', badge: badge, style: { marginBottom: 8 } }, cfg.title || 'Orbit Store');
 
@@ -365,13 +385,19 @@
   // bottom of the image, not in extra space below it. Deliberately has no
   // wh.Focusable item -- X/L1/R1 all reach OrbitLatest's own wh.onPressed
   // handlers directly, instead of first "entering" a one-item tile.
-  function renderCoverFull(allItems, index, W, H) {
+  function renderCoverFull(allItems, index, W, H, cfg) {
     var item = allItems[index] || {};
     return ce(View, { style: styles.coverFill },
       (Image && item.cover)
         ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: W, height: H } })
         : ce(View, { style: [styles.coverFill, styles.coverPlaceholderFull] },
             ce(Label, { style: styles.dim }, '?')),
+      // Widget's own logo/title, top-left, same stock wh.Title the list/grid
+      // header uses -- cover mode is otherwise the only layout with no
+      // "Orbit Store" branding at all.
+      ce(View, { style: styles.coverHeader },
+        ce(wh.Title, { iconId: cfg.iconId || 'game', style: { height: 28 } }, cfg.title || 'Orbit Store')
+      ),
       ce(View, { style: styles.coverOverlay },
         ce(Label, { style: [styles.body18, styles.coverTitle], numberOfLines: 1 }, String(item.title || item.titleId || '?')),
         allItems.length > 1 ? ce(CoverDots, { index: index, total: allItems.length }) : null
