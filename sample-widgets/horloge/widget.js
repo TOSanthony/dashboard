@@ -74,12 +74,21 @@
   // A clock hand drawn as a thin rounded bar inside a square container whose
   // own center is the pivot point: rotating the container (RN rotates around
   // a view's own center by default) rotates the hand around that pivot with
-  // no transformOrigin dependency.
+  // no transformOrigin dependency. Every dimension is rounded to a whole
+  // pixel before it reaches the rotate transform -- this runtime has no
+  // anti-aliasing on rotated views, and feeding it fractional widths/heights
+  // (thickness/2 on an odd pixel count, length as a fractional % of the
+  // radius, etc.) is what produced the off-center, jagged, sometimes
+  // partially-missing hands: a whole-pixel box rotates cleanly around its
+  // own center, a half-pixel one does not.
   function Hand(props) {
-    var size = props.radius * 2;
+    var radius = Math.round(props.radius);
+    var size = radius * 2;
+    var thickness = Math.max(2, Math.round(props.thickness));
+    var length = Math.max(thickness, Math.round(props.length));
     return ce(View, {
       style: [styles.hand, {
-        left: props.cx - props.radius, top: props.cy - props.radius,
+        left: Math.round(props.cx) - radius, top: Math.round(props.cy) - radius,
         width: size, height: size,
         transform: [{ rotate: props.angle + 'deg' }]
       }]
@@ -87,10 +96,10 @@
       ce(View, {
         style: {
           position: 'absolute',
-          left: props.radius - props.thickness / 2,
-          top: props.radius - props.length,
-          width: props.thickness, height: props.length,
-          borderRadius: props.thickness / 2,
+          left: radius - Math.round(thickness / 2),
+          top: radius - length,
+          width: thickness, height: length,
+          borderRadius: Math.round(thickness / 2),
           backgroundColor: props.color
         }
       })
@@ -98,33 +107,39 @@
   }
 
   // A short radial mark near the rim: same pivot-container technique as
-  // Hand, but the bar sits just inside the edge instead of spanning out
-  // from the center.
+  // Hand (and the same whole-pixel rounding, for the same reason), but the
+  // bar sits just inside the edge instead of spanning out from the center.
   function Tick(props) {
-    var size = props.radius * 2;
+    var radius = Math.round(props.radius);
+    var size = radius * 2;
     return ce(View, {
       style: [styles.tickWrap, {
-        left: props.cx - props.radius, top: props.cy - props.radius,
+        left: Math.round(props.cx) - radius, top: Math.round(props.cy) - radius,
         width: size, height: size,
         transform: [{ rotate: props.angle + 'deg' }]
       }]
     },
-      ce(View, {
-        style: {
-          position: 'absolute',
-          left: props.radius - props.thickness / 2, top: props.inset,
-          width: props.thickness, height: props.len,
-          borderRadius: props.thickness / 2,
-          backgroundColor: props.color
-        }
-      })
+      (function () {
+        var thickness = Math.max(1, Math.round(props.thickness));
+        var len = Math.max(1, Math.round(props.len));
+        return ce(View, {
+          style: {
+            position: 'absolute',
+            left: radius - Math.round(thickness / 2), top: Math.round(props.inset),
+            width: thickness, height: len,
+            borderRadius: Math.round(thickness / 2),
+            backgroundColor: props.color
+          }
+        });
+      })()
     );
   }
 
   // Dial faces, selectable from the stock Options popup (config.json's
   // "dial" setting) -- same free-popup mechanism as "mode"/"format".
   function faceRing(r, cx, cy) {
-    var th = Math.max(2, Math.round(r * 0.035));
+    r = Math.round(r); cx = Math.round(cx); cy = Math.round(cy);
+    var th = Math.max(3, Math.round(r * 0.035));
     return [
       ce(View, { key: 'ring', style: { position: 'absolute', left: cx - r, top: cy - r, width: r * 2, height: r * 2, borderRadius: r, backgroundColor: '#ffffff40' } }),
       ce(View, { key: 'ringcut', style: { position: 'absolute', left: cx - r + th, top: cy - r + th, width: (r - th) * 2, height: (r - th) * 2, borderRadius: r - th, backgroundColor: MAT } })
@@ -137,7 +152,7 @@
       out.push(ce(Tick, {
         key: 't' + i, cx: cx, cy: cy, radius: r, angle: i * 30,
         inset: r * 0.06, len: major ? r * 0.14 : r * 0.08,
-        thickness: major ? Math.max(2, r * 0.035) : Math.max(1, r * 0.02),
+        thickness: major ? Math.max(3, r * 0.035) : Math.max(2, r * 0.02),
         color: major ? '#ffffff' : '#ffffff80'
       }));
     }
@@ -173,17 +188,18 @@
     if (dial === 'graduated') kids = kids.concat(faceTicks(r, cx, cy));
     else if (dial === 'numbers') kids = kids.concat(faceNumerals(r, cx, cy));
 
-    kids.push(ce(Hand, { key: 'h', cx: cx, cy: cy, radius: r, length: r * 0.5, thickness: Math.max(3, r * 0.08), color: '#ffffff', angle: hourAngle }));
-    kids.push(ce(Hand, { key: 'm', cx: cx, cy: cy, radius: r, length: r * 0.75, thickness: Math.max(2, r * 0.055), color: '#ffffff', angle: minAngle }));
+    kids.push(ce(Hand, { key: 'h', cx: cx, cy: cy, radius: r, length: r * 0.5, thickness: Math.max(4, r * 0.09), color: '#ffffff', angle: hourAngle }));
+    kids.push(ce(Hand, { key: 'm', cx: cx, cy: cy, radius: r, length: r * 0.75, thickness: Math.max(3, r * 0.06), color: '#ffffff', angle: minAngle }));
     if (props.showSeconds) {
-      kids.push(ce(Hand, { key: 's', cx: cx, cy: cy, radius: r, length: r * 0.85, thickness: Math.max(1, r * 0.02), color: '#ff5b5b', angle: secAngle }));
+      kids.push(ce(Hand, { key: 's', cx: cx, cy: cy, radius: r, length: r * 0.85, thickness: Math.max(2, r * 0.025), color: '#ff5b5b', angle: secAngle }));
     }
+    var dotR = Math.max(4, Math.round(r * 0.06));
     kids.push(ce(View, {
       key: 'dot',
-      style: [styles.centerDot, { left: cx - 4, top: cy - 4, width: 8, height: 8 }]
+      style: [styles.centerDot, { left: Math.round(cx) - dotR, top: Math.round(cy) - dotR, width: dotR * 2, height: dotR * 2, borderRadius: dotR }]
     }));
 
-    return ce(View, { style: { width: r * 2, height: r * 2 } }, kids);
+    return ce(View, { style: { width: Math.round(r) * 2, height: Math.round(r) * 2 } }, kids);
   }
 
   function Horloge(props) {
