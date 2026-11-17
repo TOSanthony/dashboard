@@ -10,7 +10,7 @@ on:
         default: true
 
   push:
-    branches: [game-updates, game-updates-17]
+    branches: [main]
 
 permissions:
   contents: write
