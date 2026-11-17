@@ -1,3 +1,4 @@
+
 name: Build WH Bridge
 
 on:
@@ -18,28 +19,66 @@ concurrency:
   group: wh-bridge-build
   cancel-in-progress: false
 
+env:
+  SDK_URL: https://github.com/ps5-payload-dev/sdk/releases/latest/download/ps5-payload-sdk.zip
+
 jobs:
   build:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
 
     steps:
+      # Checkout project
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Checkout PS5 Payload SDK
-        uses: actions/checkout@v4
-        with:
-          repository: echo-storm/ps5-payload-sdk
-          path: ps5-payload-sdk
-          submodules: recursive
-          # Si le SDK est privé, ajouter un token adapté.
-
-      - name: Configure PS5 SDK
+      # Download PS5 Payload SDK
+      - name: Download PS5 Payload SDK
         run: |
-          echo "PS5_PAYLOAD_SDK=$GITHUB_WORKSPACE/ps5-payload-sdk" >> "$GITHUB_ENV"
-          chmod +x ps5-payload-sdk/bin/prospero-clang
-          
+          set -e
+
+          mkdir -p "$GITHUB_WORKSPACE/ps5-payload-sdk"
+
+          echo "Downloading PS5 Payload SDK..."
+
+          curl -fL "$SDK_URL" \
+            -o /tmp/ps5-payload-sdk.zip
+
+          echo "Extracting SDK..."
+
+          unzip -q /tmp/ps5-payload-sdk.zip \
+            -d "$GITHUB_WORKSPACE/ps5-payload-sdk"
+
+          echo "Searching for prospero-clang..."
+
+          CC_PATH="$(find "$GITHUB_WORKSPACE/ps5-payload-sdk" \
+            -type f -path '*/bin/prospero-clang' \
+            -print -quit)"
+
+          if [ -z "$CC_PATH" ]; then
+            echo "ERROR: prospero-clang not found in SDK archive"
+            exit 1
+          fi
+
+          SDK_DIR="$(dirname "$(dirname "$CC_PATH")")"
+
+          chmod +x "$CC_PATH"
+
+          echo "PS5_PAYLOAD_SDK=$SDK_DIR" >> "$GITHUB_ENV"
+
+          echo "SDK installed at: $SDK_DIR"
+
+      # Verify SDK
+      - name: Verify PS5 SDK
+        run: |
+          set -e
+
+          test -x "$PS5_PAYLOAD_SDK/bin/prospero-clang"
+
+          echo "PS5 SDK successfully installed"
+          "$PS5_PAYLOAD_SDK/bin/prospero-clang" --version
+
+      # Build WH Bridge
       - name: Build WH Bridge
         run: |
           set -e
@@ -49,23 +88,40 @@ jobs:
           SRCS="util.c remote.c hookpoint.c prelude.c server.c install.c main.c"
           OBJS=""
 
+          echo "Compiling C sources..."
+
           for f in $SRCS; do
             o="${f%.c}.o"
+
+            echo "Compiling $f..."
+
             "$CC" -Wall -g -c "$f" -o "$o"
+
             OBJS="$OBJS $o"
           done
 
+          echo "Compiling embed.S..."
+
           "$CC" -c embed.S -o embed.o
+
           OBJS="$OBJS embed.o"
 
-          "$CC" -Wall -g -pie -o wh_bridge.elf $OBJS -lSceUserService
+          echo "Linking wh_bridge.elf..."
+
+          "$CC" -Wall -g -pie -o wh_bridge.elf \
+            $OBJS \
+            -lSceUserService
 
           echo "Successfully built wh_bridge.elf"
 
+          ls -lh wh_bridge.elf
+
+      # Generate SHA256
       - name: Generate SHA256
         run: |
           sha256sum wh_bridge.elf | tee wh_bridge.elf.sha256
 
+      # Upload GitHub artifact
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
@@ -75,6 +131,7 @@ jobs:
             wh_bridge.elf
             wh_bridge.elf.sha256
 
+      # Publish GitHub Release
       - name: Publish GitHub Release
         if: ${{ github.event_name == 'push' || inputs.publish }}
         env:
@@ -84,9 +141,19 @@ jobs:
 
           VERSION="wh-bridge-${GITHUB_RUN_NUMBER}"
 
+          echo "Publishing $VERSION..."
+
           gh release create "$VERSION" \
             wh_bridge.elf \
             wh_bridge.elf.sha256 \
             --target "$GITHUB_SHA" \
             --title "WH Bridge Build ${GITHUB_RUN_NUMBER}" \
-            --notes "WH Bridge compiled from commit $GITHUB_SHA."
+            --notes "WH Bridge compiled from commit $GITHUB_SHA.
+
+          PS5 Payload SDK:
+          $SDK_URL
+
+          Build: ${GITHUB_RUN_NUMBER}
+          Commit: $GITHUB_SHA"
+
+          echo "Release successfully published: $VERSION"
