@@ -85,8 +85,14 @@ jobs:
 
           CC="$PS5_PAYLOAD_SDK/bin/prospero-clang"
 
-          SRCS="util.c remote.c hookpoint.c prelude.c server.c install.c main.c"
-          OBJS=""
+          SQLITE_CFLAGS="-DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION -DSQLITE_OMIT_SHARED_CACHE -DSQLITE_TEMP_STORE=3"
+
+          echo "Compiling sqlite3.c..."
+
+          "$CC" -O2 $SQLITE_CFLAGS -c sqlite3.c -o sqlite3.o
+
+          SRCS="util.c remote.c hookpoint.c prelude.c server.c tiles.c timesync.c install.c main.c"
+          OBJS="sqlite3.o"
 
           echo "Compiling C sources..."
 
@@ -95,7 +101,7 @@ jobs:
 
             echo "Compiling $f..."
 
-            "$CC" -Wall -g -c "$f" -o "$o"
+            "$CC" -Wall -g $SQLITE_CFLAGS -c "$f" -o "$o"
 
             OBJS="$OBJS $o"
           done
@@ -110,7 +116,7 @@ jobs:
 
           "$CC" -Wall -g -pie -o wh_bridge.elf \
             $OBJS \
-            -lSceUserService
+            -lSceUserService -lSceNet
 
           echo "Successfully built wh_bridge.elf"
 
