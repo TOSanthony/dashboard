@@ -91,7 +91,7 @@ jobs:
 
           "$CC" -O2 $SQLITE_CFLAGS -c sqlite3.c -o sqlite3.o
 
-          SRCS="util.c remote.c hookpoint.c prelude.c server.c tiles.c timesync.c install.c main.c"
+          SRCS="util.c remote.c hookpoint.c prelude.c server.c tiles.c applist.c timesync.c install.c main.c"
           OBJS="sqlite3.o"
 
           echo "Compiling C sources..."
