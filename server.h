@@ -9,7 +9,8 @@
  *     '.', no ".."; served from WH_WIDGETS_DIR only, O_NOFOLLOW, regular files
  *   - image types only (.png .jpg .jpeg), <= 1 MB; no listings, no other methods
  * Also exposes /__log (widget -> wh.log), /__wget and /__wset (per-widget
- * settings persistence) to the loader JS. */
+ * settings persistence), /__apps (installed-games list, see applist.h) and
+ * /__app_icon?id=<titleId> (that title's cover art) to the loader JS. */
 #ifndef WH_SERVER_H
 #define WH_SERVER_H
 

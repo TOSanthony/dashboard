@@ -33,7 +33,7 @@ fi
 SQLITE_CFLAGS="-DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION -DSQLITE_OMIT_SHARED_CACHE -DSQLITE_TEMP_STORE=3"
 "$CC" -O2 $SQLITE_CFLAGS -c sqlite3.c -o sqlite3.o
 
-SRCS="util.c remote.c hookpoint.c prelude.c server.c tiles.c timesync.c install.c main.c"
+SRCS="util.c remote.c hookpoint.c prelude.c server.c tiles.c applist.c timesync.c install.c main.c"
 OBJS="sqlite3.o"
 for f in $SRCS; do
   o="${f%.c}.o"

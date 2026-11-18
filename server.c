@@ -1,6 +1,7 @@
 #include "server.h"
 #include "install.h"
 #include "prelude.h"
+#include "applist.h"
 #include "util.h"
 
 static void wh_send_all(int c, const void* b, size_t n){
@@ -115,6 +116,55 @@ static void wh_settings_set(int c, char* q){
   }
   wh_reply(c, "204 No Content");
 }
+/* Sends a 200 with the given Content-Type and the whole content of `fd`
+ * (already known-good: regular file, size st_size), then closes fd. Shared
+ * by the widget-asset path below and the app-icon endpoint. */
+static void wh_send_file(int c, int fd, const char* type, long size){
+  char h[200]; int n = snprintf(h, sizeof h,
+    "HTTP/1.0 200 OK\r\nContent-Type: %s\r\nContent-Length: %ld\r\nCache-Control: max-age=60\r\nConnection: close\r\n\r\n",
+    type, size);
+  wh_send_all(c, h, (size_t)n);
+  char buf[8192]; ssize_t r;
+  while ((r = read(fd, buf, sizeof buf)) > 0) wh_send_all(c, buf, (size_t)r);
+  close(fd);
+}
+/* GET /__apps -> JSON list of installed games (see applist.h). */
+static void wh_apps_endpoint(int c){
+  char* body = 0; size_t blen = 0;
+  if (wh_apps_json(&body, &blen) != 0) {
+    wh_flog("assets", "refused /__apps: app.db unreadable");
+    wh_reply(c, "500 Internal Server Error");
+    return;
+  }
+  char h[200]; int n = snprintf(h, sizeof h,
+    "HTTP/1.0 200 OK\r\nContent-Type: application/json\r\nContent-Length: %zu\r\nConnection: close\r\n\r\n", blen);
+  klog_printf("[wc] assets: 200 /__apps (%zuB)\n", blen);
+  wh_send_all(c, h, (size_t)n); wh_send_all(c, body, blen);
+  free(body);
+}
+/* GET /__app_icon?id=<titleId> -> that title's icon0.png, straight off disk
+ * (see applist.h for the path and how confident we are in it). */
+static void wh_app_icon_endpoint(int c, char* q){
+  char id[72] = "";
+  for (char* t = q; t && *t; ) {
+    if (!strncmp(t, "id=", 3)) { size_t o = 0; for (char* u = t + 3; *u && *u != '&' && o + 1 < sizeof id; u++) id[o++] = *u; id[o] = 0; }
+    t = strchr(t, '&'); if (t) t++;
+  }
+  char path[160];
+  if (!id[0] || !wh_app_icon_path(id, path, sizeof path)) {
+    wh_flog("assets", "refused /__app_icon: no icon for id=%.60s", id);
+    wh_reply(c, "404 Not Found");
+    return;
+  }
+  int fd = open(path, O_RDONLY | O_NOFOLLOW);
+  if (fd < 0) { wh_reply(c, "404 Not Found"); return; }
+  struct stat st;
+  if (fstat(fd, &st) || !S_ISREG(st.st_mode) || st.st_size <= 0 || st.st_size > WH_ASSET_MAX) {
+    close(fd); wh_reply(c, "404 Not Found"); return;
+  }
+  klog_printf("[wc] assets: 200 /__app_icon?id=%s %ldB\n", id, (long)st.st_size);
+  wh_send_file(c, fd, "image/png", (long)st.st_size);
+}
 static void wh_asset_conn(int c){
   char req[1024]; size_t got = 0;
   while (got < sizeof req - 1){
@@ -133,6 +183,8 @@ static void wh_asset_conn(int c){
   if (!strncmp(path, "__log?", 6)) { wh_log_endpoint(c, path + 6); return; }
   if (!strncmp(path, "__wget?", 7)) { wh_settings_get(c, path + 7); return; }
   if (!strncmp(path, "__wset?", 7)) { wh_settings_set(c, path + 7); return; }
+  if (!strcmp(path, "__apps")) { wh_apps_endpoint(c); return; }
+  if (!strncmp(path, "__app_icon?", 11)) { wh_app_icon_endpoint(c, path + 11); return; }
   char shown[100]; snprintf(shown, sizeof shown, "%s", path);   /* for refused-request log lines */
   char* q = strchr(path, '?');  if (q) *q = 0;
   char* sl = strchr(path, '/');
@@ -149,14 +201,8 @@ static void wh_asset_conn(int c){
   if (fstat(fd, &st) || !S_ISREG(st.st_mode) || st.st_size <= 0 || st.st_size > WH_ASSET_MAX) {
     close(fd); wh_flog("assets", "refused /%s: not a regular file or over 1 MB", shown); wh_reply(c, "404 Not Found"); return;
   }
-  char h[200]; int n = snprintf(h, sizeof h,
-    "HTTP/1.0 200 OK\r\nContent-Type: %s\r\nContent-Length: %ld\r\nCache-Control: max-age=60\r\nConnection: close\r\n\r\n",
-    type, (long)st.st_size);
   klog_printf("[wc] assets: 200 /%s/%s %ldB\n", path, sl + 1, (long)st.st_size);
-  wh_send_all(c, h, (size_t)n);
-  char buf[8192]; ssize_t r;
-  while ((r = read(fd, buf, sizeof buf)) > 0) wh_send_all(c, buf, (size_t)r);
-  close(fd);
+  wh_send_file(c, fd, type, (long)st.st_size);
 }
 static unsigned wh_gen_read(void){
   char b[32] = {0}; int fd = open(WH_GEN_FILE, O_RDONLY | O_NOFOLLOW);

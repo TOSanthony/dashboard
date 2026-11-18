@@ -142,7 +142,7 @@ qu'avant -- seul un test sur la vraie console peut le dire.
 | `cave.h` | layout (offsets) du "code cave" écrit dans SceShellUI |
 | `hookpoint.h` / `hookpoint.c` | découverte par signature d'`evaluateJavaScript` et de son slot de vtable |
 | `prelude.h` / `prelude.c` | construit le JS injecté : `loader.js` + un bloc par widget trouvé dans `/data/wh-widgets` |
-| `server.h` / `server.c` | petit serveur HTTP (images des widgets, `/__log`, `/__wget`, `/__wset`) |
+| `server.h` / `server.c` | petit serveur HTTP (images des widgets, `/__log`, `/__wget`, `/__wset`, `/__apps`, `/__app_icon`) |
 | `install.h` / `install.c` | une installation complète : attach, construit la cave, l'écrit, repointe le hook |
 | `main.c` | point d'entrée : trouve ShellUI, installe, reste en vie comme serveur d'assets |
 | `embed.S` | embarque `bridge.hbc` (symboles `bridge_hbc_start`/`end`) et `loader.js` (symbole `wh_loader`) |
@@ -150,6 +150,7 @@ qu'avant -- seul un test sur la vraie console peut le dire.
 | `bridge.hbc` | bytecode Hermes complet extrait de la release officielle 26.11.13beta |
 | `wh_detour.h`, `wh_sigs.h` | fournis tels quels par geodox (détour assembleur, signatures de scan) |
 | `tiles.h` / `tiles.c` | écrit la visibilité des tuiles dans `app.db` au démarrage |
+| `applist.h` / `applist.c` | liste les jeux installés (`app.db` + `/system_ex/app/<titleId>/sce_sys/`) pour le widget `jeux-favoris` -- voir l'avertissement dans `applist.h`, chemins non vérifiés par ce projet lui-même |
 | `sqlite3.c`, `sqlite3.h` | amalgame SQLite (domaine public, sqlite.org), nécessaire pour lire/écrire `app.db` -- repris de `tosanthony/psgfx` |
 | `timesync.h` / `timesync.c` | synchronise l'horloge via NTP au démarrage (porté de `kerrdec97/ps5-date-time-sync`) |
 

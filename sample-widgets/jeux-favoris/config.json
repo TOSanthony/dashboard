@@ -1,0 +1,19 @@
+{
+  "id": "jeux-favoris",
+  "title": "Jeux",
+  "description": "Lancement rapide des jeux installes (jaquette + titre), tri recents ou alphabetique. Tailles DEFAULT/LARGE/FULL.",
+  "iconId": "game",
+  "size": 1,
+  "settings": [
+    {
+      "id": "tri",
+      "title": "Tri",
+      "type": "choice",
+      "options": [
+        { "value": "recents", "label": "Recents" },
+        { "value": "alpha", "label": "Alphabetique" }
+      ],
+      "default": "recents"
+    }
+  ]
+}
