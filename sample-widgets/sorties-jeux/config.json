@@ -1,0 +1,33 @@
+{
+  "id": "sorties-jeux",
+  "title": "Sorties de jeux",
+  "description": "Prochaines sorties de jeux (plateforme au choix), via l'API RAWG. Tailles DEFAULT/LARGE/FULL.",
+  "iconId": "date_time",
+  "size": 1,
+  "settings": [
+    {
+      "id": "platform",
+      "title": "Plateforme",
+      "type": "choice",
+      "options": [
+        { "value": "ps5", "label": "PS5" },
+        { "value": "ps4", "label": "PS4" },
+        { "value": "switch", "label": "Switch" },
+        { "value": "pc", "label": "PC" },
+        { "value": "xboxseries", "label": "Xbox Series X|S" }
+      ],
+      "default": "ps5"
+    },
+    {
+      "id": "horizon",
+      "title": "Fenetre",
+      "type": "choice",
+      "options": [
+        { "value": "30", "label": "30 jours" },
+        { "value": "90", "label": "3 mois" },
+        { "value": "180", "label": "6 mois" }
+      ],
+      "default": "90"
+    }
+  ]
+}
