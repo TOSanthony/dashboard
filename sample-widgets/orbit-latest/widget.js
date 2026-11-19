@@ -74,6 +74,13 @@
   // no new server-side plumbing needed.
   var EMPTY_FRAME_URI = 'http://127.0.0.1:8098/orbit-latest/empty-frame.png';
   var EMPTY_ICON_URI = 'http://127.0.0.1:8098/orbit-latest/empty-icon.png';
+  // Selection ring around a circular avatar (grid + list trio). Both
+  // GridCell and renderCompactTrio used to size the circle to fill its
+  // whole cell/slot and only then add this ring on top -- the ring had no
+  // room left and got clipped by the cell's own bounds, which is why the
+  // white selected-ring was invisible on console. Both now reserve this
+  // much space up front so the ring always fits inside the cell.
+  var CIRCLE_RING = 16;
   // TEMP DEBUG (remove once the key-guide-bar investigation is done): posts
   // to the exact same /__log endpoint + widget tag wh-inspector v23-25 use,
   // so a GridCell/Row becoming `selected` interleaves, by timestamp, into
@@ -197,11 +204,11 @@
     var item = props.item, cellW = props.cellW, cellH = props.cellH;
     // No label under the avatar (dropped per on-console feedback) -- the
     // circle gets the whole cell instead of giving up room to a text line.
-    var circle = Math.max(28, Math.min(cellW, cellH));
+    var circle = Math.max(28, Math.min(cellW, cellH) - CIRCLE_RING);
     return ce(wh.Focusable, { onPress: props.onPress, style: { width: cellW, height: cellH, alignItems: 'center', justifyContent: 'center' } },
       function (selected) {
         if (selected) debugLogSelect('GridCell', item.id || item.titleId || '?');
-        return ce(View, { style: [styles.circleFrame, selected ? styles.circleFrameSelected : null, { width: circle + 10, height: circle + 10 }] },
+        return ce(View, { style: [styles.circleFrame, selected ? styles.circleFrameSelected : null, { width: circle + CIRCLE_RING, height: circle + CIRCLE_RING }] },
           ce(View, { style: [styles.circleImg, { width: circle, height: circle }] },
             Image && item.cover
               ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: circle, height: circle, borderRadius: circle / 2 } })
@@ -272,7 +279,12 @@
     var compact = H < 300;              // DEFAULT (152)
     var mode = H < 300 ? 'list' : (H < 450 ? 'grid' : 'cover');
     var pad = 32, titleH = 40, gap = 8;
-    var innerW = W - pad, innerH = H - pad - titleH - gap;
+    var innerW = W - pad;
+    // List mode (the 3-circle trio) drops the "Orbit Store" icon+title row
+    // entirely -- per on-console feedback it was wasted space at this
+    // size -- so it gets the full body height for the circles instead of
+    // losing titleH+gap to a header that isn't drawn.
+    var innerH = mode === 'list' ? H - pad : H - pad - titleH - gap;
     var cfg = (props && props.config) || {};
 
     var coverState = React.useState(0);
@@ -366,7 +378,8 @@
     }
 
     var badge = data.loading ? null : (total ? total + ' jeu' + (total === 1 ? '' : 'x') : null);
-    var header = ce(wh.Title, { iconId: cfg.iconId || 'game', badge: badge, style: { marginBottom: 8 } }, cfg.title || 'Orbit Store');
+    var header = mode === 'list' ? null
+      : ce(wh.Title, { iconId: cfg.iconId || 'game', badge: badge, style: { marginBottom: 8 } }, cfg.title || 'Orbit Store');
 
     return ce(View, { style: [styles.card, { width: W, height: H }] },
       ce(View, { lightMat: 'auto', style: styles.mat }),
@@ -384,8 +397,10 @@
     var items = allItems.slice(0, 3);
     // No label under the avatar (dropped per on-console feedback) -- the
     // circle gets the whole slot instead of giving up room to a text line.
+    // 16px horizontal gutter between slots, plus CIRCLE_RING reserved on
+    // every side so the selection ring has room and isn't clipped.
     var slotW = Math.floor(innerW / Math.max(1, items.length));
-    var circle = Math.max(28, Math.min(innerH, slotW - 16));
+    var circle = Math.max(28, Math.min(innerH, slotW - 16) - CIRCLE_RING);
     var cells = items.map(function (item, i) {
       return ce(wh.Focusable, {
         key: item.id || item.titleId || i,
@@ -393,7 +408,7 @@
         style: { width: slotW, alignItems: 'center', justifyContent: 'center' }
       }, function (selected) {
         if (selected) debugLogSelect('Trio', item.id || item.titleId || '?');
-        return ce(View, { style: [styles.circleFrame, selected ? styles.circleFrameSelected : null, { width: circle + 10, height: circle + 10 }] },
+        return ce(View, { style: [styles.circleFrame, selected ? styles.circleFrameSelected : null, { width: circle + CIRCLE_RING, height: circle + CIRCLE_RING }] },
           ce(View, { style: [styles.circleImg, { width: circle, height: circle }] },
             Image && item.cover
               ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: circle, height: circle, borderRadius: circle / 2 } })
