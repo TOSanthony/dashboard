@@ -61,6 +61,16 @@
   // console's ELF loader when nothing answers on 34177, without touching
   // the TV app/psgm:play at all.
   var ENSURE_RUNNING_URL = 'http://127.0.0.1:8096/api/orbit_ensure_running';
+  // Nov 2026 visual refresh (design approved on a Claude Artifacts canvas
+  // mockup, ported here): circular avatars everywhere (list-at-DEFAULT,
+  // grid), a rounded-corner cover inset in jaquette mode, and a real empty
+  // state for jaquette mode while the catalog hasn't loaded yet. The two
+  // placeholder images are plain widget assets served the same way
+  // __app_icon already serves cover art, just off this widget's own folder
+  // via the generic /<widget>/<file> route in server.c's wh_asset_conn --
+  // no new server-side plumbing needed.
+  var EMPTY_FRAME_URI = 'http://127.0.0.1:8098/orbit-latest/empty-frame.png';
+  var EMPTY_ICON_URI = 'http://127.0.0.1:8098/orbit-latest/empty-icon.png';
   // TEMP DEBUG (remove once the key-guide-bar investigation is done): posts
   // to the exact same /__log endpoint + widget tag wh-inspector v23-25 use,
   // so a GridCell/Row becoming `selected` interleaves, by timestamp, into
@@ -101,20 +111,21 @@
     body18: { fontSize: F.Size3XSmall },  // 18
     gridRow: { flexDirection: 'row' },
     gridSlot: { alignItems: 'center', justifyContent: 'center' },
-    // The image is slightly smaller than its slot, so a selection border can
-    // sit in that margin (an overlay border/opacity right on the image's own
-    // edge could end up clipped by its own overflow:hidden corners).
-    // A border drawn via borderWidth/borderColor on this frame turned out
-    // not to render in this runtime (it never showed up, regardless of
-    // paint order or the gap left for it). backgroundColor is confirmed
-    // working everywhere else in this widget (rowFocused, the mat, etc.),
-    // so the "border" here is really a solid white fill peeking out from
-    // behind the smaller, centered image -- same visual result, through a
-    // style property that's actually supported.
-    gridFrame: { borderRadius: 8, backgroundColor: 'transparent', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-    gridFrameSelected: { backgroundColor: '#ffffff' },
-    gridImg: { borderRadius: 6, backgroundColor: '#263a58', overflow: 'hidden' },
-    gridLabelBar: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: '#000000a0', paddingHorizontal: 6, paddingVertical: 3 },
+    // Circular avatar, shared by the grid and by the DEFAULT-size list's
+    // row of 3 (the Nov 2026 refresh moved both off square tiles). The ring
+    // is a slightly larger circle sat behind the avatar, not a border: a
+    // border drawn via borderWidth/borderColor on this frame turned out not
+    // to render in this runtime (it never showed up, regardless of paint
+    // order or the gap left for it). backgroundColor is confirmed working
+    // everywhere else in this widget (rowFocused, the mat, etc.), so the
+    // "ring" here is really a solid white fill peeking out from behind the
+    // smaller, centered image -- same visual result, through a style
+    // property that's actually supported. White ring on selection, per the
+    // approved design (earlier versions used the accent color here).
+    circleFrame: { borderRadius: 999, backgroundColor: 'transparent', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+    circleFrameSelected: { backgroundColor: '#ffffff' },
+    circleImg: { borderRadius: 999, backgroundColor: '#263a58', overflow: 'hidden' },
+    circleLabel: { textAlign: 'center' },
     // Cover mode: the image fills the whole card edge to edge (no gap from
     // the card's own padding), title/dots overlaid on a bottom strip.
     // Same clipping note as `cover` above: don't rely on the card's own
@@ -122,7 +133,20 @@
     // -- clip right here, at the View that directly wraps the full-bleed
     // cover Image, so the corners match the tile's 16px radius reliably.
     coverFill: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 16, overflow: 'hidden' },
-    coverPlaceholderFull: { backgroundColor: '#263a58', alignItems: 'center', justifyContent: 'center' },
+    // Nov 2026 refresh: the dashed-frame placeholder art (same visual Sony
+    // uses for an empty cover slot) sits full-bleed behind the tile, and the
+    // actual jaquette is inset to land exactly inside its dashed square,
+    // rounded 10px -- matches the approved canvas mockup. The frame image is
+    // sized proportionally to whatever W/H the hub actually hands us rather
+    // than hardcoded, since FULL-size tiles aren't guaranteed to be the
+    // exact 504x504 square the reference asset was measured against.
+    coverFrameBg: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+    coverInset: { position: 'absolute', overflow: 'hidden', borderRadius: 10, backgroundColor: '#263a58' },
+    // The empty-state icon (same glyph as inside the dashed frame, without
+    // its own border) centered in the same slot while the catalog hasn't
+    // loaded yet, plus a status line where the title/dots normally sit.
+    coverEmptyIcon: { position: 'absolute' },
+    coverEmptyStatus: { position: 'absolute', left: 16, right: 16, bottom: 18, textAlign: 'center' },
     // No backdrop here either (same choice as coverHeader below): just the
     // "i / n" progress counter floating over the jaquette, bottom-right.
     coverOverlay: { position: 'absolute', right: 0, bottom: 0,
@@ -161,31 +185,25 @@
     });
   }
 
-  // A grid cell: same Focusable-with-cover idiom as Row, laid out as a square
-  // tile with the title overlaid on a dark strip instead of beside it, so no
-  // extra row height is spent on the label.
+  // A grid cell: circular avatar with the title centered below it (Nov 2026
+  // refresh -- was a square tile with the title overlaid on a dark strip).
+  // cellW/cellH is the whole slot the 3x3 layout gave this cell; the circle
+  // is sized to fit inside it once a one-line label is reserved below.
   function GridCell(props) {
-    var item = props.item, slot = props.size;
-    // The border frame sits right at the slot's own edge (cells already have
-    // a gap between them from the grid layout, so adjacent borders never
-    // touch); the image is noticeably smaller than that, leaving a clear
-    // gap all around it for the border to actually be visible in -- the
-    // earlier attempt had the image almost touching the border, which made
-    // it unreadable regardless of color/stacking.
-    // A thin ring, like the native highlight (e.g. the controller selector
-    // on the Welcome screen) -- not a thick block.
-    var img = slot - 6;
-    return ce(wh.Focusable, { onPress: props.onPress, style: { width: slot, height: slot, alignItems: 'center', justifyContent: 'center' } },
+    var item = props.item, cellW = props.cellW, cellH = props.cellH;
+    var labelH = 14, gapY = 4;
+    var circle = Math.max(28, Math.min(cellW, cellH - labelH - gapY));
+    return ce(wh.Focusable, { onPress: props.onPress, style: { width: cellW, height: cellH, alignItems: 'center', justifyContent: 'flex-start' } },
       function (selected) {
         if (selected) debugLogSelect('GridCell', item.id || item.titleId || '?');
-        return ce(View, { style: [styles.gridFrame, selected ? styles.gridFrameSelected : null, { width: slot, height: slot }] },
-          ce(View, { style: [styles.gridImg, { width: img, height: img }] },
-            Image && item.cover
-              ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: img, height: img } })
-              : null,
-            ce(View, { style: styles.gridLabelBar },
-              ce(Label, { style: styles.small, numberOfLines: 1 }, String(item.title || item.titleId || '?')))
-          )
+        return ce(View, { style: { alignItems: 'center' } },
+          ce(View, { style: [styles.circleFrame, selected ? styles.circleFrameSelected : null, { width: circle + 6, height: circle + 6 }] },
+            ce(View, { style: [styles.circleImg, { width: circle, height: circle }] },
+              Image && item.cover
+                ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: circle, height: circle, borderRadius: circle / 2 } })
+                : null)
+          ),
+          ce(Label, { style: [styles.small, styles.circleLabel, { width: cellW, marginTop: gapY }], numberOfLines: 1 }, String(item.title || item.titleId || '?'))
         );
       });
   }
@@ -275,13 +293,21 @@
     var innerW = W - pad, innerH = H - pad - titleH - gap;
     var cfg = (props && props.config) || {};
 
-    // Cover mode, once there's something to show: the cover fills the whole
-    // tile edge to edge (no card padding, no separate header row) -- the
-    // widget's own logo/title sit on a top overlay strip, the current
-    // game's title/dots on a bottom one, both over the image.
-    if (mode === 'cover' && !data.loading && !data.error && total)
+    // Cover mode fills the whole tile edge to edge (no card padding, no
+    // separate header row) in every state, not just once a cover is ready --
+    // the Nov 2026 refresh added a proper empty state (dashed-frame art +
+    // centered icon + status line) instead of falling through to the plain
+    // list-style loading/error text below.
+    if (mode === 'cover') {
+      var statusLabel = data.loading ? 'Chargement du catalogue...'
+        : data.error ? 'Erreur: ' + data.error
+        : !total ? 'Aucun jeu dans le catalogue.'
+        : null;
       return ce(View, { style: [styles.card, { width: W, height: H }] },
-        renderCoverFull(data.items, coverIndex, W, H, cfg));
+        statusLabel
+          ? renderCoverEmpty(W, H, cfg, statusLabel)
+          : renderCoverFull(data.items, coverIndex, W, H, cfg));
+    }
 
     var body;
     if (data.loading) {
@@ -292,6 +318,8 @@
       body = ce(Label, { style: styles.dim }, 'Aucun jeu dans le catalogue.');
     } else if (mode === 'grid') {
       body = renderGrid(data.items, innerW, innerH, openItem);
+    } else if (compact) {
+      body = renderCompactTrio(data.items, innerW, innerH, openItem);
     } else {
       body = renderList(data.items, compact, innerH, openItem);
     }
@@ -305,8 +333,42 @@
     );
   }
 
-  // List mode: a dense text row per game, cover art once there's room (same
-  // layout this widget always had).
+  // DEFAULT size (compact, 152 tall): a single row of up to 3 circular
+  // avatars with the title below each, matching the approved mockup --
+  // replaces the earlier dense text-only list at this size. circle is
+  // sized to whatever vertical room is actually left after the header and
+  // a one-line label, so it still adapts if the hub ever hands this widget
+  // a slightly different DEFAULT height.
+  function renderCompactTrio(allItems, innerW, innerH, openItem) {
+    var items = allItems.slice(0, 3);
+    var labelH = 14, gapY = 3;
+    var slotW = Math.floor(innerW / Math.max(1, items.length));
+    var circle = Math.max(28, Math.min(innerH - labelH - gapY, slotW - 16));
+    var cells = items.map(function (item, i) {
+      return ce(wh.Focusable, {
+        key: item.id || item.titleId || i,
+        onPress: function () { openItem(item); },
+        style: { width: slotW, alignItems: 'center' }
+      }, function (selected) {
+        if (selected) debugLogSelect('Trio', item.id || item.titleId || '?');
+        return ce(View, { style: { alignItems: 'center' } },
+          ce(View, { style: [styles.circleFrame, selected ? styles.circleFrameSelected : null, { width: circle + 6, height: circle + 6 }] },
+            ce(View, { style: [styles.circleImg, { width: circle, height: circle }] },
+              Image && item.cover
+                ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: circle, height: circle, borderRadius: circle / 2 } })
+                : null)
+          ),
+          ce(Label, { style: [styles.small, styles.circleLabel, { width: slotW, marginTop: gapY }], numberOfLines: 1 }, String(item.title || item.titleId || '?'))
+        );
+      });
+    });
+    return ce(View, { style: { flexDirection: 'row', justifyContent: 'space-evenly', alignItems: 'flex-start' } }, cells);
+  }
+
+  // LARGE/FULL "list" mode: a dense text row per game, cover art once
+  // there's room (same layout this widget always had -- untouched by the
+  // Nov 2026 refresh, which only changed the DEFAULT-size trio above and
+  // the grid/jaquette modes).
   function renderList(allItems, compact, innerH, openItem) {
     var rowH = compact ? 28 : 56;
     var coverSize = compact ? 0 : 40;
@@ -337,22 +399,26 @@
   var GRID_COLUMNS = 3, GRID_ROWS = 3;
   function renderGrid(allItems, innerW, innerH, openItem) {
     var gap = 8;
-    var byWidth = Math.floor((innerW - gap * (GRID_COLUMNS - 1)) / GRID_COLUMNS);
-    var byHeight = Math.floor((innerH - gap * (GRID_ROWS - 1)) / GRID_ROWS);
-    var cellSize = Math.min(byWidth, byHeight); // keep every square the same size
+    // cellW/cellH no longer need to match: a circle-with-label-below cell is
+    // taller than it is wide for a given avatar size, unlike the old square
+    // tile-with-overlay layout, so each dimension gets its own share of the
+    // available box.
+    var cellW = Math.floor((innerW - gap * (GRID_COLUMNS - 1)) / GRID_COLUMNS);
+    var cellH = Math.floor((innerH - gap * (GRID_ROWS - 1)) / GRID_ROWS);
     var items = allItems.slice(0, GRID_COLUMNS * GRID_ROWS);
     var lines = [];
     for (var r = 0; r < GRID_ROWS; r++) {
       var cells = [];
       for (var col = 0; col < GRID_COLUMNS; col++) {
         var idx = r * GRID_COLUMNS + col;
-        if (idx >= items.length) { cells.push(ce(View, { key: 'e' + idx, style: { width: cellSize, height: cellSize } })); }
+        if (idx >= items.length) { cells.push(ce(View, { key: 'e' + idx, style: { width: cellW, height: cellH } })); }
         else {
           var item = items[idx];
           cells.push(ce(GridCell, {
             key: item.id || item.titleId || idx,
             item: item,
-            size: cellSize,
+            cellW: cellW,
+            cellH: cellH,
             onPress: (function (it) { return function () { openItem(it); }; })(item)
           }));
         }
@@ -361,27 +427,41 @@
       lines.push(ce(View, { key: 'row' + r, style: [styles.gridRow, r > 0 ? { marginTop: gap } : null] }, cells));
     }
     // The 3x3 block is usually smaller than the available box in one
-    // dimension (cellSize is capped by whichever of width/height is
-    // tighter) -- center it in both so the leftover space is split evenly
+    // dimension -- center it in both so the leftover space is split evenly
     // instead of all landing on one side.
     return ce(View, { style: { width: innerW, height: innerH, alignItems: 'center', justifyContent: 'center' } }, lines);
   }
 
-  // Cover mode: the cover art fills the entire tile edge to edge, like the
-  // stock PS Store widget's featured-game view -- resizeMode 'cover' keeps
-  // the image's own proportions and crops to fit (so a tall/square cover in
-  // a short DEFAULT-size tile shows its vertical middle, not a squeezed or
-  // letterboxed version). Title/dots sit on a translucent strip over the
-  // bottom of the image, not in extra space below it. Deliberately has no
-  // wh.Focusable item -- X/L1/R1 all reach OrbitLatest's own wh.onPressed
-  // handlers directly, instead of first "entering" a one-item tile.
+  // Where the jaquette inset sits within a W x H tile, in the Nov 2026
+  // refresh's frame-background layout. Proportional to whatever size the
+  // hub actually hands this widget (FULL isn't guaranteed to be exactly the
+  // 504x504 square the reference placeholder art was measured against):
+  // a square sized to half the tile's shorter side, centered horizontally
+  // and set slightly above vertical center to leave room for the title/dots
+  // strip at the bottom -- matches the approved mockup's proportions.
+  function coverInsetRect(W, H) {
+    var size = Math.round(Math.min(W, H) * 0.5);
+    var left = Math.round((W - size) / 2);
+    var top = Math.round((H - size) / 2) - Math.round(H * 0.015);
+    return { left: left, top: top, size: size };
+  }
+
+  // Cover mode, once a jaquette is available: the dashed-frame placeholder
+  // art sits full-bleed behind the tile, with the real cover inset exactly
+  // inside its dashed square, rounded 10px (approved mockup). resizeMode
+  // 'cover' keeps the image's own proportions and crops to fit. Title/dots
+  // sit on a strip over the bottom. Deliberately has no wh.Focusable item --
+  // X/L1/R1 all reach OrbitLatest's own wh.onPressed handlers directly,
+  // instead of first "entering" a one-item tile.
   function renderCoverFull(allItems, index, W, H, cfg) {
     var item = allItems[index] || {};
+    var r = coverInsetRect(W, H);
     return ce(View, { style: styles.coverFill },
-      (Image && item.cover)
-        ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: W, height: H } })
-        : ce(View, { style: [styles.coverFill, styles.coverPlaceholderFull] },
-            ce(Label, { style: styles.dim }, '?')),
+      Image ? ce(Image, { source: { uri: EMPTY_FRAME_URI }, resizeMode: 'cover', style: [styles.coverFrameBg, { width: W, height: H }] }) : null,
+      ce(View, { style: [styles.coverInset, { left: r.left, top: r.top, width: r.size, height: r.size }] },
+        Image && item.cover
+          ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: r.size, height: r.size, borderRadius: 10 } })
+          : null),
       // Widget's own logo/title, top-left, same stock wh.Title the list/grid
       // header uses -- cover mode is otherwise the only layout with no
       // "Orbit Store" branding at all.
@@ -391,6 +471,22 @@
       allItems.length > 1
         ? ce(View, { style: styles.coverOverlay }, ce(CoverProgress, { index: index, total: allItems.length }))
         : null
+    );
+  }
+
+  // Cover mode, nothing to show yet (loading, errored, or an empty catalog):
+  // same dashed-frame background, but the bare "no image" glyph centered in
+  // the same slot a real jaquette would occupy, and the status line where
+  // the title/dots normally sit.
+  function renderCoverEmpty(W, H, cfg, statusLabel) {
+    var r = coverInsetRect(W, H);
+    return ce(View, { style: styles.coverFill },
+      Image ? ce(Image, { source: { uri: EMPTY_FRAME_URI }, resizeMode: 'cover', style: [styles.coverFrameBg, { width: W, height: H }] }) : null,
+      Image ? ce(Image, { source: { uri: EMPTY_ICON_URI }, resizeMode: 'contain', style: [styles.coverEmptyIcon, { left: r.left, top: r.top, width: r.size, height: r.size }] }) : null,
+      ce(View, { style: styles.coverHeader },
+        ce(wh.Title, { iconId: cfg.iconId || 'game', style: { height: 28 } }, cfg.title || 'Orbit Store')
+      ),
+      ce(Label, { style: [styles.coverEmptyStatus, styles.small, styles.dim], numberOfLines: 2 }, statusLabel)
     );
   }
 
