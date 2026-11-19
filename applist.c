@@ -85,21 +85,35 @@ static int path_exists(const char* p){ struct stat st; return stat(p, &st) == 0;
 
 /* Picks the best title name out of param.json's localizedParameters: the
  * caller's preferred locale, then whatever defaultLanguage says, then
- * en-US, then just the first "titleName" anywhere in the file, then the
- * titleId itself if nothing at all is found. Mirrors the schema confirmed
- * via PS-Multi-Tools (see applist.h) -- not independently verified here. */
+ * en-US/en-GB, then just the first "titleName" anywhere in the file, then
+ * the titleId itself if nothing at all is found.
+ *
+ * Bug fixed after a real-console test (LEGO Batman showed up in Arabic):
+ * the locale-block pattern used to require the key, ':' and '{' with no
+ * whitespace at all ("\"fr-FR\":{") -- param.json is usually minified like
+ * that, but at least one title's wasn't, so the "fr-FR" (and "en-US")
+ * lookups silently failed and fell all the way through to the last-resort
+ * "first titleName anywhere in the file", which happens to land on
+ * whichever locale sorts first in that title's JSON (ar-* in this case).
+ * Now whitespace-tolerant around ':' the same way wh_json_str already is. */
 static void pick_title(const char* json, const char* prefer_locale, const char* title_id, char* out, size_t cap){
   char pat[48], blk[768];
-  const char* tries[3]; int nt = 0;
+  const char* tries[4]; int nt = 0;
   char def_lang[16] = "";
   if (prefer_locale && prefer_locale[0]) tries[nt++] = prefer_locale;
   if (wh_json_str(json, "defaultLanguage", def_lang, sizeof def_lang) == 0 && def_lang[0]) tries[nt++] = def_lang;
   tries[nt++] = "en-US";
+  tries[nt++] = "en-GB";
   for (int i = 0; i < nt; i++) {
-    snprintf(pat, sizeof pat, "\"%s\":{", tries[i]);
+    snprintf(pat, sizeof pat, "\"%s\"", tries[i]);
     const char* p = strstr(json, pat);
     if (!p) continue;
-    p += strlen(pat) - 1;                 /* back up onto the '{' */
+    p += strlen(pat);
+    while (*p==' '||*p=='\t'||*p=='\n'||*p=='\r') p++;
+    if (*p != ':') continue;
+    p++;
+    while (*p==' '||*p=='\t'||*p=='\n'||*p=='\r') p++;
+    if (*p != '{') continue;              /* that key wasn't a locale block */
     int depth = 0; const char* e = p;
     for (; *e; e++) { if (*e == '{') depth++; else if (*e == '}') { depth--; if (!depth) { e++; break; } } }
     size_t blen = (size_t)(e - p); if (blen >= sizeof blk) blen = sizeof blk - 1;
