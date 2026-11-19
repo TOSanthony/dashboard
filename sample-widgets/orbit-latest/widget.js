@@ -205,16 +205,28 @@
     // No label under the avatar (dropped per on-console feedback) -- the
     // circle gets the whole cell instead of giving up room to a text line.
     var circle = Math.max(28, Math.min(cellW, cellH) - CIRCLE_RING);
-    return ce(wh.Focusable, { onPress: props.onPress, style: { width: cellW, height: cellH, alignItems: 'center', justifyContent: 'center' } },
-      function (selected) {
+    var frame = circle + CIRCLE_RING;
+    // The ring was invisible on console because it relied on the render
+    // callback's `selected` argument to toggle a style -- but Row (whose
+    // focus highlight IS visible) never uses that argument for its own
+    // look; it only uses it for the debug log, and gets its actual visual
+    // feedback from wh.Focusable's own `focusedStyle` prop instead. Ring
+    // now goes through that same, confirmed-working mechanism: the
+    // Focusable's own box IS the ring frame, and focusedStyle swaps its
+    // background to white on focus.
+    return ce(View, { style: { width: cellW, height: cellH, alignItems: 'center', justifyContent: 'center' } },
+      ce(wh.Focusable, {
+        onPress: props.onPress,
+        style: [styles.circleFrame, { width: frame, height: frame }],
+        focusedStyle: styles.circleFrameSelected
+      }, function (selected) {
         if (selected) debugLogSelect('GridCell', item.id || item.titleId || '?');
-        return ce(View, { style: [styles.circleFrame, selected ? styles.circleFrameSelected : null, { width: circle + CIRCLE_RING, height: circle + CIRCLE_RING }] },
-          ce(View, { style: [styles.circleImg, { width: circle, height: circle }] },
-            Image && item.cover
-              ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: circle, height: circle, borderRadius: circle / 2 } })
-              : null)
-        );
-      });
+        return ce(View, { style: [styles.circleImg, { width: circle, height: circle }] },
+          Image && item.cover
+            ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: circle, height: circle, borderRadius: circle / 2 } })
+            : null);
+      })
+    );
   }
 
   // Pagination counter under a full-tile cover, e.g. "1 / 201" -- no title,
@@ -403,20 +415,28 @@
     // every side so the selection ring has room and isn't clipped.
     var slotW = Math.floor(innerW / Math.max(1, items.length));
     var circle = Math.max(28, Math.min(innerH, slotW - 16) - CIRCLE_RING);
+    var frame = circle + CIRCLE_RING;
+    // Same fix as GridCell: the ring now goes through wh.Focusable's own
+    // focusedStyle (confirmed working, via Row) instead of the render
+    // callback's `selected` argument, which Row itself never relies on for
+    // its own visual feedback either.
     var cells = items.map(function (item, i) {
-      return ce(wh.Focusable, {
+      return ce(View, {
         key: item.id || item.titleId || i,
-        onPress: function () { openItem(item); },
         style: { width: slotW, alignItems: 'center', justifyContent: 'center' }
-      }, function (selected) {
-        if (selected) debugLogSelect('Trio', item.id || item.titleId || '?');
-        return ce(View, { style: [styles.circleFrame, selected ? styles.circleFrameSelected : null, { width: circle + CIRCLE_RING, height: circle + CIRCLE_RING }] },
-          ce(View, { style: [styles.circleImg, { width: circle, height: circle }] },
+      },
+        ce(wh.Focusable, {
+          onPress: function () { openItem(item); },
+          style: [styles.circleFrame, { width: frame, height: frame }],
+          focusedStyle: styles.circleFrameSelected
+        }, function (selected) {
+          if (selected) debugLogSelect('Trio', item.id || item.titleId || '?');
+          return ce(View, { style: [styles.circleImg, { width: circle, height: circle }] },
             Image && item.cover
               ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: circle, height: circle, borderRadius: circle / 2 } })
-              : null)
-        );
-      });
+              : null);
+        })
+      );
     });
     return ce(View, { style: { flexDirection: 'row', justifyContent: 'space-evenly', alignItems: 'center' } }, cells);
   }
