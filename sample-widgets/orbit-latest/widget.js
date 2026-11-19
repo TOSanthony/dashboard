@@ -509,20 +509,34 @@
   // transition); Animated.View accepts both.
   function FanCard(props) {
     var r = props.r, item = props.item;
+    // Every dimension fed to a rotated view gets rounded to a whole pixel
+    // (same rule as the clock widget's hands) -- size is 253 (odd), so
+    // size/2 lands on a half pixel, and left on that fractional a corner-
+    // radius/overflow:hidden silently stops clipping on this runtime
+    // (confirmed on-console: the rounded corners just didn't show).
     var size = Math.round(r.size);
     var pivotX = Math.round(r.left + FAN_PIVOT_X_RATIO * r.size);
-    var pivotY = Math.round(r.top + FAN_PIVOT_Y_RATIO * r.size);
+    var pivotY = Math.round(r.top + FAN_PIVOT_Y_RATIO * r.size) + (props.pivotYAdjust || 0);
     // Card's center at rest (0deg), relative to the pivot.
     var offX = Math.round(r.left + r.size / 2 - pivotX);
     var offY = Math.round(r.top + r.size / 2 - pivotY);
+    var left = Math.round(offX - size / 2), top = Math.round(offY - size / 2);
     return ce(Animated.View, { style: { position: 'absolute', left: pivotX, top: pivotY, width: 0, height: 0, transform: [{ rotate: props.rot }] } },
       ce(Animated.View, {
-        style: [styles.coverInset, { left: offX - size / 2, top: offY - size / 2, width: size, height: size, opacity: props.op }]
+        style: [styles.coverInset, { left: left, top: top, width: size, height: size, opacity: props.op }]
       }, Image && item && item.cover
         ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: size, height: size, borderRadius: 10 } })
         : null)
     );
   }
+
+  // The left (-20deg) card reads slightly high against the dashed frame
+  // art -- it lines up with the left dashed edge but doesn't reach down to
+  // the bottom one. Confirmed on-console; nudging its pivot down a few
+  // pixels (a plain top-offset on the un-rotated wrapper, so it's a pure
+  // screen-space shift that doesn't disturb the left alignment) fixes it
+  // without touching the right side, which wasn't reported as off.
+  var FAN_LEFT_PIVOT_Y_ADJUST = 10;
 
   // Cover mode, once a jaquette is available: three games fanned out from
   // the shared pivot above -- current flat and up front, the next game
@@ -544,7 +558,7 @@
       var nextItem = total > 1 ? allItems[(index + 1) % total] : null;
       var prevItem = total > 1 ? allItems[(index - 1 + total) % total] : null;
       cards = [
-        prevItem ? ce(FanCard, { key: 'l', r: r, item: prevItem, rot: -FAN_DEG + 'deg', op: 0.9 }) : null,
+        prevItem ? ce(FanCard, { key: 'l', r: r, item: prevItem, rot: -FAN_DEG + 'deg', op: 0.9, pivotYAdjust: FAN_LEFT_PIVOT_Y_ADJUST }) : null,
         nextItem ? ce(FanCard, { key: 'r', r: r, item: nextItem, rot: FAN_DEG + 'deg', op: 0.9 }) : null,
         ce(FanCard, { key: 'c', r: r, item: curItem, rot: '0deg', op: 1 })
       ];
