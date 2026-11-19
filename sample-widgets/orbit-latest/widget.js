@@ -442,26 +442,29 @@
   function coverInsetRect(W, H) {
     var size = Math.round(Math.min(W, H) * 0.5);
     var left = Math.round((W - size) / 2);
-    var top = Math.round((H - size) / 2) - Math.round(H * 0.015);
+    var top = Math.round((H - size) / 2) - Math.round(H * 0.045);
     return { left: left, top: top, size: size };
   }
 
-  // Cover mode, once a jaquette is available: the dashed-frame placeholder
-  // art sits full-bleed behind the tile, with the real cover inset exactly
-  // inside its dashed square, rounded 10px (approved mockup). resizeMode
-  // 'cover' keeps the image's own proportions and crops to fit. Title/dots
-  // sit on a strip over the bottom. Deliberately has no wh.Focusable item --
-  // X/L1/R1 all reach OrbitLatest's own wh.onPressed handlers directly,
-  // instead of first "entering" a one-item tile.
+  // Cover mode, once a jaquette is available: the real cover sits inset,
+  // rounded 10px, with the dashed-frame placeholder art painted OVER it full
+  // -bleed -- the frame is on a transparent PNG, so its dashed lines land on
+  // top of the jaquette as a decorative border instead of being hidden
+  // behind it (paint order here is the children's own order, same as the
+  // selection-ring trick elsewhere in this widget). resizeMode 'cover' keeps
+  // the cover's own proportions and crops to fit. Title/dots sit on a strip
+  // over the bottom. Deliberately has no wh.Focusable item -- X/L1/R1 all
+  // reach OrbitLatest's own wh.onPressed handlers directly, instead of
+  // first "entering" a one-item tile.
   function renderCoverFull(allItems, index, W, H, cfg) {
     var item = allItems[index] || {};
     var r = coverInsetRect(W, H);
     return ce(View, { style: styles.coverFill },
-      Image ? ce(Image, { source: { uri: EMPTY_FRAME_URI }, resizeMode: 'cover', style: [styles.coverFrameBg, { width: W, height: H }] }) : null,
       ce(View, { style: [styles.coverInset, { left: r.left, top: r.top, width: r.size, height: r.size }] },
         Image && item.cover
           ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: r.size, height: r.size, borderRadius: 10 } })
           : null),
+      Image ? ce(Image, { source: { uri: EMPTY_FRAME_URI }, resizeMode: 'cover', style: [styles.coverFrameBg, { width: W, height: H }] }) : null,
       // Widget's own logo/title, top-left, same stock wh.Title the list/grid
       // header uses -- cover mode is otherwise the only layout with no
       // "Orbit Store" branding at all.
