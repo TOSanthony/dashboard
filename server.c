@@ -2,6 +2,7 @@
 #include "install.h"
 #include "prelude.h"
 #include "applist.h"
+#include "tiles.h"
 #include "util.h"
 
 static void wh_send_all(int c, const void* b, size_t n){
@@ -292,6 +293,7 @@ void wh_asset_loop(int s, unsigned my, pid_t target, uint64_t start_gen){
       last_watch = now;
       uint64_t h = wh_watch_rehash();
       if (h != cur_gen) wh_watch_reinstall(h, &cur_gen);
+      wh_orbit_watch_tick();
     }
     if (pr <= 0) continue;
     int c = accept(s, 0, 0);

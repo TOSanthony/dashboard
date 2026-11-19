@@ -28,6 +28,9 @@ int main(void){
    * PlayStation Plus hidden. Writes app.db directly; no ShellUI restart or
    * console reboot needed, the shell re-reads it on its own. */
   wh_apply_tile_visibility();
+  /* Pins Orbit Store into the system row and locks its position there, so it
+   * never drifts out of place. Silent: wh.log only, no on-screen notification. */
+  wh_apply_orbit_pin();
   /* Restores the clock via NTP if the RTC/CMOS battery is dead or
    * disconnected (console boots with a stale date). Non-fatal either way. */
   int tsync_rc = wh_sync_time();
