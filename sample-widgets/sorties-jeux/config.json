@@ -23,7 +23,9 @@
       "title": "Fenetre",
       "type": "choice",
       "options": [
-        { "value": "30", "label": "30 jours" },
+        { "value": "1", "label": "Aujourd'hui" },
+        { "value": "7", "label": "Cette semaine" },
+        { "value": "30", "label": "Ce mois" },
         { "value": "90", "label": "3 mois" },
         { "value": "180", "label": "6 mois" }
       ],
