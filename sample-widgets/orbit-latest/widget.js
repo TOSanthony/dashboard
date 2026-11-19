@@ -128,7 +128,6 @@
     circleFrame: { borderRadius: 999, backgroundColor: 'transparent', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
     circleFrameSelected: { backgroundColor: '#ffffff' },
     circleImg: { borderRadius: 999, backgroundColor: '#263a58', overflow: 'hidden' },
-    circleLabel: { textAlign: 'center' },
     // Cover mode: the image fills the whole card edge to edge (no gap from
     // the card's own padding), title/dots overlaid on a bottom strip.
     // Same clipping note as `cover` above: don't rely on the card's own
@@ -194,19 +193,17 @@
   // is sized to fit inside it once a one-line label is reserved below.
   function GridCell(props) {
     var item = props.item, cellW = props.cellW, cellH = props.cellH;
-    var labelH = 14, gapY = 4;
-    var circle = Math.max(28, Math.min(cellW, cellH - labelH - gapY));
-    return ce(wh.Focusable, { onPress: props.onPress, style: { width: cellW, height: cellH, alignItems: 'center', justifyContent: 'flex-start' } },
+    // No label under the avatar (dropped per on-console feedback) -- the
+    // circle gets the whole cell instead of giving up room to a text line.
+    var circle = Math.max(28, Math.min(cellW, cellH));
+    return ce(wh.Focusable, { onPress: props.onPress, style: { width: cellW, height: cellH, alignItems: 'center', justifyContent: 'center' } },
       function (selected) {
         if (selected) debugLogSelect('GridCell', item.id || item.titleId || '?');
-        return ce(View, { style: { alignItems: 'center' } },
-          ce(View, { style: [styles.circleFrame, selected ? styles.circleFrameSelected : null, { width: circle + 6, height: circle + 6 }] },
-            ce(View, { style: [styles.circleImg, { width: circle, height: circle }] },
-              Image && item.cover
-                ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: circle, height: circle, borderRadius: circle / 2 } })
-                : null)
-          ),
-          ce(Label, { style: [styles.small, styles.circleLabel, { width: cellW, marginTop: gapY }], numberOfLines: 1 }, String(item.title || item.titleId || '?'))
+        return ce(View, { style: [styles.circleFrame, selected ? styles.circleFrameSelected : null, { width: circle + 10, height: circle + 10 }] },
+          ce(View, { style: [styles.circleImg, { width: circle, height: circle }] },
+            Image && item.cover
+              ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: circle, height: circle, borderRadius: circle / 2 } })
+              : null)
         );
       });
   }
@@ -383,28 +380,26 @@
   // a slightly different DEFAULT height.
   function renderCompactTrio(allItems, innerW, innerH, openItem) {
     var items = allItems.slice(0, 3);
-    var labelH = 14, gapY = 3;
+    // No label under the avatar (dropped per on-console feedback) -- the
+    // circle gets the whole slot instead of giving up room to a text line.
     var slotW = Math.floor(innerW / Math.max(1, items.length));
-    var circle = Math.max(28, Math.min(innerH - labelH - gapY, slotW - 16));
+    var circle = Math.max(28, Math.min(innerH, slotW - 16));
     var cells = items.map(function (item, i) {
       return ce(wh.Focusable, {
         key: item.id || item.titleId || i,
         onPress: function () { openItem(item); },
-        style: { width: slotW, alignItems: 'center' }
+        style: { width: slotW, alignItems: 'center', justifyContent: 'center' }
       }, function (selected) {
         if (selected) debugLogSelect('Trio', item.id || item.titleId || '?');
-        return ce(View, { style: { alignItems: 'center' } },
-          ce(View, { style: [styles.circleFrame, selected ? styles.circleFrameSelected : null, { width: circle + 6, height: circle + 6 }] },
-            ce(View, { style: [styles.circleImg, { width: circle, height: circle }] },
-              Image && item.cover
-                ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: circle, height: circle, borderRadius: circle / 2 } })
-                : null)
-          ),
-          ce(Label, { style: [styles.small, styles.circleLabel, { width: slotW, marginTop: gapY }], numberOfLines: 1 }, String(item.title || item.titleId || '?'))
+        return ce(View, { style: [styles.circleFrame, selected ? styles.circleFrameSelected : null, { width: circle + 10, height: circle + 10 }] },
+          ce(View, { style: [styles.circleImg, { width: circle, height: circle }] },
+            Image && item.cover
+              ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: circle, height: circle, borderRadius: circle / 2 } })
+              : null)
         );
       });
     });
-    return ce(View, { style: { flexDirection: 'row', justifyContent: 'space-evenly', alignItems: 'flex-start' } }, cells);
+    return ce(View, { style: { flexDirection: 'row', justifyContent: 'space-evenly', alignItems: 'center' } }, cells);
   }
 
   // LARGE/FULL "list" mode: a dense text row per game, cover art once
@@ -492,42 +487,54 @@
     return { left: left, top: top, size: size };
   }
 
-  // One jaquette tile within the cover-mode carousel. Always positioned at
-  // the inset rect's own left/top -- moved into place purely through
-  // transform (translateX/Y + rotate), never by changing left/top, so
-  // Animated can tween it smoothly (same approach meteo's widget uses for
-  // its rotating/falling icons). tx/ty/rot/op are either plain numbers
-  // (steady state) or Animated/interpolated nodes (mid-transition);
-  // Animated.View accepts both.
-  function CoverCard(props) {
+  // Fan geometry measured by the user in GIMP on the 504x504 reference tile:
+  // all three jaquettes are the same 253x253 square sitting at the inset
+  // rect's own position, and the left/right ones are just that square
+  // rotated +-20deg around a shared pivot at (239.5, 397.5) -- below and
+  // left-of-center, so rotating swings the tops of the cards apart into a
+  // fan while their bottom corners stay close together. Expressed here as
+  // ratios of the inset size so it scales for a FULL tile that isn't
+  // exactly 504x504: pivot sits at r.left + 0.4486*r.size horizontally and
+  // r.top + 1.1324*r.size vertically (i.e. below the square itself).
+  var FAN_PIVOT_X_RATIO = 113.5 / 253, FAN_PIVOT_Y_RATIO = 286.5 / 253, FAN_DEG = 20;
+
+  // One jaquette tile within the cover-mode fan. RN (this engine included)
+  // only ever rotates a view around its own center, no transformOrigin --
+  // so, same trick the clock widget uses for its hands: an invisible,
+  // zero-size wrapper positioned exactly at the pivot is what gets rotated,
+  // and the actual card sits inside it, offset so that at 0deg it lands
+  // exactly on the inset rect. Rotating the wrapper then swings the card
+  // around the pivot instead of around its own center. rot/op are either
+  // plain numbers (steady state) or Animated/interpolated nodes (mid-
+  // transition); Animated.View accepts both.
+  function FanCard(props) {
     var r = props.r, item = props.item;
-    return ce(Animated.View, {
-      style: [styles.coverInset, {
-        left: r.left, top: r.top, width: r.size, height: r.size, opacity: props.op,
-        transform: [{ translateX: props.tx }, { translateY: props.ty }, { rotate: props.rot }]
-      }]
-    }, Image && item && item.cover
-      ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: r.size, height: r.size, borderRadius: 10 } })
-      : null);
+    var size = Math.round(r.size);
+    var pivotX = Math.round(r.left + FAN_PIVOT_X_RATIO * r.size);
+    var pivotY = Math.round(r.top + FAN_PIVOT_Y_RATIO * r.size);
+    // Card's center at rest (0deg), relative to the pivot.
+    var offX = Math.round(r.left + r.size / 2 - pivotX);
+    var offY = Math.round(r.top + r.size / 2 - pivotY);
+    return ce(Animated.View, { style: { position: 'absolute', left: pivotX, top: pivotY, width: 0, height: 0, transform: [{ rotate: props.rot }] } },
+      ce(Animated.View, {
+        style: [styles.coverInset, { left: offX - size / 2, top: offY - size / 2, width: size, height: size, opacity: props.op }]
+      }, Image && item && item.cover
+        ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: size, height: size, borderRadius: 10 } })
+        : null)
+    );
   }
 
-  // Offsets for the carousel's "behind" slot, in px/deg -- same numbers as
-  // the approved canvas mockup (second card at left+18/top+10, rotated 13deg
-  // from the front card). The left slot mirrors this horizontally.
-  var COVER_DX = 18, COVER_DY = 10, COVER_DEG = 13;
-
-  // Cover mode, once a jaquette is available: the current cover sits inset,
-  // rounded 10px, front and flat; the next game in the catalog peeks out
-  // tilted behind it. The dashed-frame placeholder art is painted OVER the
-  // whole stack full-bleed -- it's a transparent PNG, so its dashed lines
-  // land on top as a decorative border instead of being hidden underneath.
-  // L1/R1 (via startCoverTransition in OrbitLatest) slide+tilt the stack:
-  // R1 sends the current cover sliding out to the left while the behind
-  // card straightens into the front slot; L1 is the mirror, pulling the
-  // previous game in from the left while the current one slides into the
-  // behind-right slot it'll occupy once it's the "next" game again.
-  // animT/trans come from the parent so the transition survives a re-render
-  // triggered by something unrelated (a catalog refetch, for instance).
+  // Cover mode, once a jaquette is available: three games fanned out from
+  // the shared pivot above -- current flat and up front, the next game
+  // peeking +20deg behind-right, the previous game -20deg behind-left. The
+  // dashed-frame placeholder art is painted OVER the whole fan full-bleed --
+  // it's a transparent PNG, so its dashed lines land on top as a decorative
+  // border instead of being hidden underneath. L1/R1 (via
+  // startCoverTransition in OrbitLatest) rotate the whole fan by one slot:
+  // R1 swings the current cover back into the left slot while the right one
+  // swings in to front; L1 is the exact mirror. animT/trans come from the
+  // parent so the transition survives a re-render triggered by something
+  // unrelated (a catalog refetch, for instance).
   function renderCoverStack(allItems, index, W, H, cfg, animT, trans) {
     var total = allItems.length;
     var r = coverInsetRect(W, H);
@@ -535,52 +542,46 @@
     if (!trans) {
       var curItem = allItems[index];
       var nextItem = total > 1 ? allItems[(index + 1) % total] : null;
+      var prevItem = total > 1 ? allItems[(index - 1 + total) % total] : null;
       cards = [
-        nextItem ? ce(CoverCard, { key: 'r', r: r, item: nextItem, tx: COVER_DX, ty: COVER_DY, rot: COVER_DEG + 'deg', op: 0.9 }) : null,
-        ce(CoverCard, { key: 'c', r: r, item: curItem, tx: 0, ty: 0, rot: '0deg', op: 1 })
+        prevItem ? ce(FanCard, { key: 'l', r: r, item: prevItem, rot: -FAN_DEG + 'deg', op: 0.9 }) : null,
+        nextItem ? ce(FanCard, { key: 'r', r: r, item: nextItem, rot: FAN_DEG + 'deg', op: 0.9 }) : null,
+        ce(FanCard, { key: 'c', r: r, item: curItem, rot: '0deg', op: 1 })
       ];
     } else if (trans.dir === 'next') {
       cards = [
-        ce(CoverCard, {
-          key: 'in', r: r, item: trans.right,
-          tx: animT.interpolate({ inputRange: [0, 1], outputRange: [COVER_DX, 0] }),
-          ty: animT.interpolate({ inputRange: [0, 1], outputRange: [COVER_DY, 0] }),
-          rot: animT.interpolate({ inputRange: [0, 1], outputRange: [COVER_DEG + 'deg', '0deg'] }),
-          op: animT.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] })
-        }),
-        ce(CoverCard, {
-          key: 'out', r: r, item: trans.cur,
-          tx: animT.interpolate({ inputRange: [0, 1], outputRange: [0, -Math.round(r.size * 0.55)] }),
-          ty: 0,
-          rot: animT.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '-18deg'] }),
-          op: animT.interpolate({ inputRange: [0, 1], outputRange: [1, 0] })
-        })
-      ];
-    } else { // 'prev' -- deliberately the SAME motion template as 'next'
-      // (center card always exits left/tilts left, the incoming card always
-      // arrives from the behind-right slot), just with the previous item as
-      // the incoming one instead of the next item. A uniform direction
-      // regardless of L1/R1, like a simple one-way carousel, rather than a
-      // mirrored left/right motion -- confirmed on-console against the
-      // mirrored version, which read as wrong.
-      cards = [
-        trans.right ? ce(CoverCard, {
-          key: 'old', r: r, item: trans.right, tx: COVER_DX, ty: COVER_DY, rot: COVER_DEG + 'deg',
+        trans.left ? ce(FanCard, {
+          key: 'exit', r: r, item: trans.left,
+          rot: animT.interpolate({ inputRange: [0, 1], outputRange: [-FAN_DEG + 'deg', (-FAN_DEG - 15) + 'deg'] }),
           op: animT.interpolate({ inputRange: [0, 1], outputRange: [0.9, 0] })
         }) : null,
-        ce(CoverCard, {
-          key: 'in', r: r, item: trans.left,
-          tx: animT.interpolate({ inputRange: [0, 1], outputRange: [COVER_DX, 0] }),
-          ty: animT.interpolate({ inputRange: [0, 1], outputRange: [COVER_DY, 0] }),
-          rot: animT.interpolate({ inputRange: [0, 1], outputRange: [COVER_DEG + 'deg', '0deg'] }),
-          op: animT.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] })
+        ce(FanCard, {
+          key: 'toLeft', r: r, item: trans.cur,
+          rot: animT.interpolate({ inputRange: [0, 1], outputRange: ['0deg', -FAN_DEG + 'deg'] }),
+          op: animT.interpolate({ inputRange: [0, 1], outputRange: [1, 0.9] })
         }),
-        ce(CoverCard, {
-          key: 'out', r: r, item: trans.cur,
-          tx: animT.interpolate({ inputRange: [0, 1], outputRange: [0, -Math.round(r.size * 0.55)] }),
-          ty: 0,
-          rot: animT.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '-18deg'] }),
-          op: animT.interpolate({ inputRange: [0, 1], outputRange: [1, 0] })
+        ce(FanCard, {
+          key: 'toCenter', r: r, item: trans.right,
+          rot: animT.interpolate({ inputRange: [0, 1], outputRange: [FAN_DEG + 'deg', '0deg'] }),
+          op: animT.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] })
+        })
+      ];
+    } else { // 'prev' -- exact mirror of 'next'
+      cards = [
+        trans.right ? ce(FanCard, {
+          key: 'exit', r: r, item: trans.right,
+          rot: animT.interpolate({ inputRange: [0, 1], outputRange: [FAN_DEG + 'deg', (FAN_DEG + 15) + 'deg'] }),
+          op: animT.interpolate({ inputRange: [0, 1], outputRange: [0.9, 0] })
+        }) : null,
+        ce(FanCard, {
+          key: 'toRight', r: r, item: trans.cur,
+          rot: animT.interpolate({ inputRange: [0, 1], outputRange: ['0deg', FAN_DEG + 'deg'] }),
+          op: animT.interpolate({ inputRange: [0, 1], outputRange: [1, 0.9] })
+        }),
+        ce(FanCard, {
+          key: 'toCenter', r: r, item: trans.left,
+          rot: animT.interpolate({ inputRange: [0, 1], outputRange: [-FAN_DEG + 'deg', '0deg'] }),
+          op: animT.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] })
         })
       ];
     }
