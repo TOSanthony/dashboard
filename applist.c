@@ -8,6 +8,17 @@
 #define APPDB_PATH   "/system_data/priv/mms/app.db"
 #define APPDB_DISP_GAMES 138
 #define WH_APPS_MAX 96
+/* Game metadata (param.json, icon0.png) on a LIVE console lives here, not
+ * under /system_ex/app/<id>/sce_sys/ as first assumed (that path comes from
+ * PS-Multi-Tools reading an offline backup dump, a different thing -- see
+ * applist.h). Confirmed via PS-Mac-Tools (same family of tools, open
+ * source): its live-console dump explicitly pulls
+ * /system_data/priv/appmeta/<id>/ into the sce_sys/ folder of its output.
+ * /user/appmeta/<id>/ is mentioned as a second source by the same tool;
+ * tried as a fallback below in case a given title only has one of the two
+ * (e.g. some PS4-BC titles may lack an appmeta entry entirely). */
+#define APPMETA_PATH_PRIV "/system_data/priv/appmeta"
+#define APPMETA_PATH_USER "/user/appmeta"
 
 typedef struct { char id[32]; long long last; } AppRow;
 
@@ -110,13 +121,20 @@ static void json_escape_into(const char* s, char* out, size_t cap){
   out[o] = 0;
 }
 
+/* Tries /system_data/priv/appmeta/<id>/<file>, then /user/appmeta/<id>/<file>
+ * (see the comment on APPMETA_PATH_PRIV above for why). */
+static int appmeta_find(const char* title_id, const char* file, char* out, size_t cap){
+  char p[160];
+  snprintf(p, sizeof p, "%s/%s/%s", APPMETA_PATH_PRIV, title_id, file);
+  if (path_exists(p)) { snprintf(out, cap, "%s", p); return 1; }
+  snprintf(p, sizeof p, "%s/%s/%s", APPMETA_PATH_USER, title_id, file);
+  if (path_exists(p)) { snprintf(out, cap, "%s", p); return 1; }
+  return 0;
+}
+
 int wh_app_icon_path(const char* title_id, char* out, size_t cap){
-  size_t n = strlen(title_id);
-  if (!wh_name_ok(title_id, n)) return 0;
-  char p[160]; snprintf(p, sizeof p, "/system_ex/app/%s/sce_sys/icon0.png", title_id);
-  if (!path_exists(p)) return 0;
-  snprintf(out, cap, "%s", p);
-  return 1;
+  if (!wh_name_ok(title_id, strlen(title_id))) return 0;
+  return appmeta_find(title_id, "icon0.png", out, cap);
 }
 
 int wh_apps_json(char** out, size_t* outlen){
@@ -138,8 +156,8 @@ int wh_apps_json(char** out, size_t* outlen){
   for (int i = 0; i < n; i++) {
     char mount[160], param[160];
     snprintf(mount, sizeof mount, "/user/app/%s/mount.lnk", rows[i].id);
-    snprintf(param, sizeof param, "/system_ex/app/%s/sce_sys/param.json", rows[i].id);
-    int mount_ok = path_exists(mount), param_ok = path_exists(param);
+    int mount_ok = path_exists(mount);
+    int param_ok = appmeta_find(rows[i].id, "param.json", param, sizeof param);
     if (!mount_ok || !param_ok) {
       if (!mount_ok) skip_mount++;
       if (!param_ok) skip_param++;

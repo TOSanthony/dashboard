@@ -1,22 +1,33 @@
 /* applist.h -- lists installed games (titleId + display name) for the
  * "jeux-favoris" quick-launch widget, and locates each one's icon0.png.
  *
- * Two pieces of on-disk data, neither of which this project had touched
- * before now:
+ * Two pieces of on-disk data:
  *   - which titleIds are installed, non-system "games" -- from app.db
  *     (tbl_iconinfo*, dispLocation=138), same tables tiles.c already reads.
- *   - each title's display name + cover art -- from its own on-console
- *     content folder, /system_ex/app/<titleId>/sce_sys/{param.json,icon0.png}.
- *     These two paths (plus /user/app/<titleId>/mount.lnk as the "is this
- *     title actually installed/mounted right now" check) are NOT something
- *     this repo had verified itself -- they come from SvenGDK/PS-Multi-Tools
- *     (an open-source PS5 backup manager), which checks the exact same two
- *     paths before treating a title as installed, and reads icon0.png/
- *     param.json from the exact same sce_sys subfolder once it does. That's
- *     a real tool doing the same thing against real consoles, which is the
- *     best confirmation available without a console of our own to test on
- *     -- but it's still unverified BY THIS PROJECT. If the favoris widget
- *     comes up empty on real hardware, this is the first place to check. */
+ *   - each title's display name + cover art -- from its appmeta folder,
+ *     /system_data/priv/appmeta/<titleId>/{param.json,icon0.png}, with
+ *     /user/appmeta/<titleId>/ tried as a fallback.
+ *   - "is this title actually installed right now" check:
+ *     /user/app/<titleId>/mount.lnk existing.
+ *
+ * History: the first version of this file used /system_ex/app/<titleId>/
+ * sce_sys/{param.json,icon0.png} for the second point, a path copied from
+ * SvenGDK/PS-Multi-Tools (an open-source PS5 backup manager) -- but that
+ * tool reads from an OFFLINE BACKUP DUMP, not a live console, and on a real
+ * console that path doesn't exist. Confirmed empty in a real wh.log: app.db
+ * correctly listed 9 installed titleIds, mount.lnk was found for all of
+ * them, but param.json was MISSING for all of them at that path. Corrected
+ * to /system_data/priv/appmeta/<titleId>/, per PS-Mac-Tools (same tool
+ * family, open source): its live-console dump pulls
+ * /system_data/priv/appmeta/<titleId>/ (and /user/appmeta/<titleId>/ as an
+ * alternate source) into the sce_sys/ folder of its output -- i.e. that's
+ * where sce_sys's content actually lives on a running console, cached
+ * separately from the encrypted game image so it can be read without
+ * mounting it. mount.lnk's path was right the first time (confirmed
+ * present in that same wh.log). Still not tested end-to-end by this project
+ * (no console of our own) -- if the favoris widget is still empty after
+ * this fix, check wh.log's "applist:" lines again, they say exactly which
+ * of the two checks is failing and for which titleId. */
 #ifndef WH_APPLIST_H
 #define WH_APPLIST_H
 
