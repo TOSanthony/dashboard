@@ -482,9 +482,13 @@
   // and set slightly above vertical center to leave room for the title/dots
   // strip at the bottom -- matches the approved mockup's proportions.
   function coverInsetRect(W, H) {
-    var size = Math.round(Math.min(W, H) * 0.5);
+    // Pinned to the user's own measurement on a 504x504 tile: 253x253 at
+    // (126, 111). Kept proportional (0.502 of the shorter side, nudged up
+    // 0.029*H from vertical center) so it still lands close to right on a
+    // FULL size that isn't exactly 504x504.
+    var size = Math.round(Math.min(W, H) * 0.502);
     var left = Math.round((W - size) / 2);
-    var top = Math.round((H - size) / 2) - Math.round(H * 0.045);
+    var top = Math.round((H - size) / 2) - Math.round(H * 0.029);
     return { left: left, top: top, size: size };
   }
 
@@ -552,25 +556,31 @@
           op: animT.interpolate({ inputRange: [0, 1], outputRange: [1, 0] })
         })
       ];
-    } else { // 'prev'
+    } else { // 'prev' -- deliberately the SAME motion template as 'next'
+      // (center card always exits left/tilts left, the incoming card always
+      // arrives from the behind-right slot), just with the previous item as
+      // the incoming one instead of the next item. A uniform direction
+      // regardless of L1/R1, like a simple one-way carousel, rather than a
+      // mirrored left/right motion -- confirmed on-console against the
+      // mirrored version, which read as wrong.
       cards = [
         trans.right ? ce(CoverCard, {
           key: 'old', r: r, item: trans.right, tx: COVER_DX, ty: COVER_DY, rot: COVER_DEG + 'deg',
           op: animT.interpolate({ inputRange: [0, 1], outputRange: [0.9, 0] })
         }) : null,
         ce(CoverCard, {
-          key: 'out', r: r, item: trans.cur,
-          tx: animT.interpolate({ inputRange: [0, 1], outputRange: [0, COVER_DX] }),
-          ty: animT.interpolate({ inputRange: [0, 1], outputRange: [0, COVER_DY] }),
-          rot: animT.interpolate({ inputRange: [0, 1], outputRange: ['0deg', COVER_DEG + 'deg'] }),
-          op: animT.interpolate({ inputRange: [0, 1], outputRange: [1, 0.9] })
+          key: 'in', r: r, item: trans.left,
+          tx: animT.interpolate({ inputRange: [0, 1], outputRange: [COVER_DX, 0] }),
+          ty: animT.interpolate({ inputRange: [0, 1], outputRange: [COVER_DY, 0] }),
+          rot: animT.interpolate({ inputRange: [0, 1], outputRange: [COVER_DEG + 'deg', '0deg'] }),
+          op: animT.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] })
         }),
         ce(CoverCard, {
-          key: 'in', r: r, item: trans.left,
-          tx: animT.interpolate({ inputRange: [0, 1], outputRange: [-COVER_DX, 0] }),
-          ty: animT.interpolate({ inputRange: [0, 1], outputRange: [COVER_DY, 0] }),
-          rot: animT.interpolate({ inputRange: [0, 1], outputRange: ['-' + COVER_DEG + 'deg', '0deg'] }),
-          op: animT.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] })
+          key: 'out', r: r, item: trans.cur,
+          tx: animT.interpolate({ inputRange: [0, 1], outputRange: [0, -Math.round(r.size * 0.55)] }),
+          ty: 0,
+          rot: animT.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '-18deg'] }),
+          op: animT.interpolate({ inputRange: [0, 1], outputRange: [1, 0] })
         })
       ];
     }
