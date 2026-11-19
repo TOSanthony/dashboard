@@ -126,6 +126,7 @@ int wh_apps_json(char** out, size_t* outlen){
   int n = apps_collect(db, rows, WH_APPS_MAX);
   sqlite3_close(db);
   if (n < 0) return -1;
+  wh_flog("applist", "app.db: %d titleId candidate(s) with dispLocation=%d", n, APPDB_DISP_GAMES);
 
   size_t cap = 64 * 1024;
   char* buf = (char*)malloc(cap);
@@ -133,11 +134,22 @@ int wh_apps_json(char** out, size_t* outlen){
   size_t o = 0;
   buf[o++] = '[';
   int wrote = 0;
+  int skip_mount = 0, skip_param = 0, logged = 0;
   for (int i = 0; i < n; i++) {
     char mount[160], param[160];
     snprintf(mount, sizeof mount, "/user/app/%s/mount.lnk", rows[i].id);
     snprintf(param, sizeof param, "/system_ex/app/%s/sce_sys/param.json", rows[i].id);
-    if (!path_exists(mount) || !path_exists(param)) continue;   /* known to app.db, not actually installed */
+    int mount_ok = path_exists(mount), param_ok = path_exists(param);
+    if (!mount_ok || !param_ok) {
+      if (!mount_ok) skip_mount++;
+      if (!param_ok) skip_param++;
+      if (logged < 5) {   /* a handful of concrete examples is enough to diagnose a wrong path assumption */
+        wh_flog("applist", "%s: skipped (mount.lnk %s, param.json %s)", rows[i].id,
+          mount_ok ? "found" : "MISSING", param_ok ? "found" : "MISSING");
+        logged++;
+      }
+      continue;   /* known to app.db, not actually installed (or our path assumption is wrong) */
+    }
     char* json = 0; size_t jlen = 0;
     char title[256] = "", esc[300];
     if (wh_read_file(param, &json, &jlen) == 0) {
@@ -157,5 +169,7 @@ int wh_apps_json(char** out, size_t* outlen){
   buf[o++] = ']';
   buf[o] = 0;
   *out = buf; *outlen = o;
+  wh_flog("applist", "/__apps: %d/%d listed (%d skipped: mount.lnk missing x%d, param.json missing x%d)",
+    wrote, n, n - wrote, skip_mount, skip_param);
   return 0;
 }
