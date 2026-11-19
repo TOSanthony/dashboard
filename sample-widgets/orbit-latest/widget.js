@@ -278,13 +278,15 @@
     var H = (props && props.height) || 152;
     var compact = H < 300;              // DEFAULT (152)
     var mode = H < 300 ? 'list' : (H < 450 ? 'grid' : 'cover');
-    var pad = 32, titleH = 40, gap = 8;
+    // List and grid both drop the "Orbit Store" icon+title row now (per
+    // on-console feedback it was wasted space at either size) and, freed
+    // of the header, also use a tighter 8px edge padding instead of the
+    // standard 16px so the circles get noticeably bigger -- closer to the
+    // size of the PS5's own stock "controllers" widget's circles.
+    var noHeader = mode === 'list' || mode === 'grid';
+    var pad = noHeader ? 16 : 32, titleH = 40, gap = 8;
     var innerW = W - pad;
-    // List mode (the 3-circle trio) drops the "Orbit Store" icon+title row
-    // entirely -- per on-console feedback it was wasted space at this
-    // size -- so it gets the full body height for the circles instead of
-    // losing titleH+gap to a header that isn't drawn.
-    var innerH = mode === 'list' ? H - pad : H - pad - titleH - gap;
+    var innerH = noHeader ? H - pad : H - pad - titleH - gap;
     var cfg = (props && props.config) || {};
 
     var coverState = React.useState(0);
@@ -378,12 +380,12 @@
     }
 
     var badge = data.loading ? null : (total ? total + ' jeu' + (total === 1 ? '' : 'x') : null);
-    var header = mode === 'list' ? null
+    var header = noHeader ? null
       : ce(wh.Title, { iconId: cfg.iconId || 'game', badge: badge, style: { marginBottom: 8 } }, cfg.title || 'Orbit Store');
 
     return ce(View, { style: [styles.card, { width: W, height: H }] },
       ce(View, { lightMat: 'auto', style: styles.mat }),
-      ce(View, { style: styles.body }, header, body)
+      ce(View, { style: [styles.body, noHeader ? { padding: 8 } : null] }, header, body)
     );
   }
 
@@ -515,50 +517,53 @@
   // r.top + 1.1324*r.size vertically (i.e. below the square itself).
   var FAN_PIVOT_X_RATIO = 113.5 / 253, FAN_PIVOT_Y_RATIO = 286.5 / 253, FAN_DEG = 20;
 
-  // One jaquette tile within the cover-mode fan. RN (this engine included)
-  // only ever rotates a view around its own center, no transformOrigin --
-  // so, same trick the clock widget uses for its hands: an invisible,
-  // zero-size wrapper positioned exactly at the pivot is what gets rotated,
-  // and the actual card sits inside it, offset so that at 0deg it lands
-  // exactly on the inset rect. Rotating the wrapper then swings the card
-  // around the pivot instead of around its own center. rot/op are either
-  // plain numbers (steady state) or Animated/interpolated nodes (mid-
-  // transition); Animated.View accepts both.
-  // Big enough that a card can never swing past its edge no matter the
-  // angle: distance pivot-to-card-center is ~160px, plus the card's own
-  // half-diagonal (~179px at 253x253), so 350px of half-box is comfortable
-  // margin even mid-transition (the exit card briefly overshoots to
-  // +/-35deg).
-  var FAN_BOX = 700;
-
+  // One jaquette tile within the cover-mode fan.
+  //
+  // Two pivot techniques were tried and both still showed square corners
+  // on console for the left/right cards (only the un-rotated center card
+  // ever came out rounded) -- a zero-size pivot wrapper, then a real,
+  // generously sized one, both rotating an ANCESTOR with the actual
+  // clipped/rounded card as its un-rotated child. That split (center
+  // rounds, any non-zero angle doesn't) points at a well-known RN
+  // limitation this engine inherits (it's RN-based -- see "RNPS" in the
+  // clock widget's comments): overflow:hidden clipping on a child does
+  // not survive a rotation applied to an ancestor, because the clip is
+  // computed before the ancestor's transform matrix is applied. horloge's
+  // hands never hit this because they have no clipped child at all --
+  // just a single rounded, solid-filled bar.
+  //
+  // Fix: don't rotate an ancestor at all. Put the rotation on the SAME
+  // view that owns the borderRadius/overflow:hidden/Image, so there's no
+  // ancestor boundary for the clip to get lost across. To still rotate
+  // around a point other than this view's own center (which is all this
+  // engine supports naturally), use the standard translate/rotate/
+  // translate-back trick: shift the pivot to where the view's center
+  // already is, rotate (now effectively around the pivot), then shift
+  // back by the same amount.
   function FanCard(props) {
     var r = props.r, item = props.item;
     // Every dimension fed to a rotated view gets rounded to a whole pixel
     // (same rule as the clock widget's hands) -- size is 253 (odd), so
     // size/2 lands on a half pixel.
     var size = Math.round(r.size);
-    var pivotX = Math.round(r.left + FAN_PIVOT_X_RATIO * r.size);
-    var pivotY = Math.round(r.top + FAN_PIVOT_Y_RATIO * r.size) + (props.pivotYAdjust || 0);
-    // Card's center at rest (0deg), relative to the pivot.
-    var offX = Math.round(r.left + r.size / 2 - pivotX);
-    var offY = Math.round(r.top + r.size / 2 - pivotY);
-    // The rotated wrapper must be a real, properly sized box -- not the
-    // old zero-size pivot wrapper. Confirmed on-console: with a 0x0
-    // rotated parent, the inner card's borderRadius/overflow:hidden never
-    // clipped at all (square corners on every card, including the
-    // un-rotated center one), only the position was right. horloge's
-    // clock hands use this same pivot technique but with a real sized box
-    // (see Hand in horloge/widget.js) -- mirroring that here is what
-    // actually gets the rounded corners to render.
-    var half = FAN_BOX / 2;
-    var left = Math.round(half + offX - size / 2), top = Math.round(half + offY - size / 2);
-    return ce(Animated.View, { style: { position: 'absolute', left: pivotX - half, top: pivotY - half, width: FAN_BOX, height: FAN_BOX, transform: [{ rotate: props.rot }] } },
-      ce(Animated.View, {
-        style: [styles.coverInset, { left: left, top: top, width: size, height: size, opacity: props.op }]
-      }, Image && item && item.cover
-        ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: size, height: size, borderRadius: 10 } })
-        : null)
-    );
+    var left = Math.round(r.left), top = Math.round(r.top);
+    var pivotX = Math.round(left + FAN_PIVOT_X_RATIO * r.size);
+    var pivotY = Math.round(top + FAN_PIVOT_Y_RATIO * r.size) + (props.pivotYAdjust || 0);
+    // Vector from this card's own (un-rotated) center to the pivot.
+    var dx = Math.round(pivotX - (left + size / 2));
+    var dy = Math.round(pivotY - (top + size / 2));
+    return ce(Animated.View, {
+      style: [styles.coverInset, {
+        left: left, top: top, width: size, height: size, opacity: props.op,
+        transform: [
+          { translateX: dx }, { translateY: dy },
+          { rotate: props.rot },
+          { translateX: -dx }, { translateY: -dy }
+        ]
+      }]
+    }, Image && item && item.cover
+      ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: size, height: size, borderRadius: 10 } })
+      : null);
   }
 
   // The left (-20deg) card reads slightly high against the dashed frame
