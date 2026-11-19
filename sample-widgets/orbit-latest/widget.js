@@ -32,11 +32,13 @@
 //     POST/GET /api/v1/open-request. A press posts the catalog id there
 //     first, then launches Orbit Store as before; the app itself picks the
 //     request up on its next poll and opens straight to that game's page.
-//   - Display modes (list/grid/cover): config.json declares a "settings"
-//     array (docs/sdk/settings.md), which gets the widget a free Options
-//     (Start) popup -- the same one Battery's "View selector" and the
-//     Controllers widget use -- with no popup UI code of our own. The
-//     chosen value just shows up on props.settings.displayMode.
+//   - Display modes (list/grid/cover) are now driven by the tile's own size
+//     instead of a separate Options popup: resizing with L1/R1 in edit mode
+//     (DEFAULT -> LARGE -> FULL) picks the mode directly, since that's what
+//     people expected resizing to do. Thresholds (H<300 / H<450) are a
+//     best guess at LARGE/FULL's real heights -- nothing in the SDK exposes
+//     a named size, only width/height -- adjust if testing on console shows
+//     the breakpoints landing on the wrong size.
 //   - Cover mode has no wh.Focusable items (it's one big tile, not a list),
 //     so it's never "entered"; L1/R1/Cross reach wh.onPressed directly
 //     (confirmed in docs/sdk/input-and-focus.md). List/grid keep their rows
@@ -48,6 +50,7 @@
   var View = wh.View;
   var Image = wh.Image;
   var Label = wh.Label;
+  var Animated = wh.Animated;
   var ce = React.createElement;
   var F = wh.FontSizePS;
   var B = wh.Button;
@@ -214,6 +217,15 @@
     return ce(Label, { style: styles.coverProgress }, (props.index + 1) + ' / ' + props.total);
   }
 
+  // Persistent Animated.Value across renders (same helper meteo's widget
+  // uses for its spinning/falling icons) -- lets the jaquette carousel below
+  // tween smoothly with Animated.timing instead of jumping between states.
+  function useAnimVal(initial) {
+    var ref = React.useRef(null);
+    if (!ref.current) ref.current = new Animated.Value(initial || 0);
+    return ref.current;
+  }
+
   function OrbitLatest(props) {
     var dataState = React.useState({ loading: true, error: '', items: [] });
     var data = dataState[0], setData = dataState[1];
@@ -252,15 +264,51 @@
       return function () { mounted.current = false; clearInterval(id); };
     }, []);
 
-    // "Mode d'affichage" (list/grid/cover), set from the stock Options popup
-    // (settings.md) -- props.settings is merged over config.json's defaults.
-    var settings = (props && props.settings) || {};
-    var mode = settings.displayMode || 'list';
+    // Tile size comes from the grid (L1/R1 resize in edit mode): fill the
+    // given box and adapt the layout, same idea as payload-monitor. The
+    // display mode itself is now derived from the size (see the Nov 2026
+    // note at the top of the file) rather than a separate Options popup.
+    var W = (props && props.width) || 504;
+    var H = (props && props.height) || 152;
+    var compact = H < 300;              // DEFAULT (152)
+    var mode = H < 300 ? 'list' : (H < 450 ? 'grid' : 'cover');
+    var pad = 32, titleH = 40, gap = 8;
+    var innerW = W - pad, innerH = H - pad - titleH - gap;
+    var cfg = (props && props.config) || {};
 
     var coverState = React.useState(0);
     var coverIndex = coverState[0], setCoverIndex = coverState[1];
     var total = data.items.length;
     if (coverIndex >= total && total > 0) coverIndex = 0; // the catalog shrank under us
+
+    // Jaquette carousel (Nov 2026 refresh): a second cover peeks out tilted
+    // behind the current one, and L1/R1 slide+tilt the stack across instead
+    // of just swapping the image. animT runs 0->1 over one transition;
+    // transRef snapshots which items are involved and which direction, so
+    // the render stays stable even if the catalog refetches mid-animation.
+    // runningRef blocks a second press from starting mid-tween.
+    var animT = useAnimVal(0);
+    var transRef = React.useRef(null);
+    var runningRef = React.useRef(false);
+    var forceState = React.useState(0);
+    var forceRender = forceState[1];
+    function startCoverTransition(dir) {
+      if (runningRef.current || total < 2) return;
+      runningRef.current = true;
+      transRef.current = {
+        dir: dir,
+        cur: data.items[coverIndex],
+        left: data.items[(coverIndex - 1 + total) % total],
+        right: data.items[(coverIndex + 1) % total]
+      };
+      animT.setValue(0);
+      forceRender(function (n) { return n + 1; }); // paint the first animated frame
+      Animated.timing(animT, { toValue: 1, duration: 240, useNativeDriver: false }).start(function () {
+        runningRef.current = false;
+        transRef.current = null;
+        setCoverIndex(function (i) { return dir === 'next' ? (i + 1) % total : (i - 1 + total) % total; });
+      });
+    }
 
     function openItem(item) {
       log('launch: ' + (item.title || item.titleId));
@@ -273,25 +321,19 @@
     // the hub's normal resize/selection/entering behaviour alone.
     wh.onPressed(B.L1, function () {
       if (mode !== 'cover' || total < 2) return false;
-      setCoverIndex(function (i) { return (i - 1 + total) % total; });
+      startCoverTransition('prev');
     });
     wh.onPressed(B.R1, function () {
       if (mode !== 'cover' || total < 2) return false;
-      setCoverIndex(function (i) { return (i + 1) % total; });
+      startCoverTransition('next');
     });
     wh.onPressed(B.Cross, function () {
       if (mode !== 'cover' || !total) return false;
       openItem(data.items[coverIndex]);
     });
 
-    // Tile size comes from the grid (L1/R1 resize in edit mode): fill the
-    // given box and adapt the layout, same idea as payload-monitor.
-    var W = (props && props.width) || 504;
-    var H = (props && props.height) || 152;
-    var compact = H < 300;              // DEFAULT (152)
     var pad = 32, titleH = 40, gap = 8;
     var innerW = W - pad, innerH = H - pad - titleH - gap;
-    var cfg = (props && props.config) || {};
 
     // Cover mode fills the whole tile edge to edge (no card padding, no
     // separate header row) in every state, not just once a cover is ready --
@@ -306,7 +348,7 @@
       return ce(View, { style: [styles.card, { width: W, height: H }] },
         statusLabel
           ? renderCoverEmpty(W, H, cfg, statusLabel)
-          : renderCoverFull(data.items, coverIndex, W, H, cfg));
+          : renderCoverStack(data.items, coverIndex, W, H, cfg, animT, transRef.current));
     }
 
     var body;
@@ -446,24 +488,94 @@
     return { left: left, top: top, size: size };
   }
 
-  // Cover mode, once a jaquette is available: the real cover sits inset,
-  // rounded 10px, with the dashed-frame placeholder art painted OVER it full
-  // -bleed -- the frame is on a transparent PNG, so its dashed lines land on
-  // top of the jaquette as a decorative border instead of being hidden
-  // behind it (paint order here is the children's own order, same as the
-  // selection-ring trick elsewhere in this widget). resizeMode 'cover' keeps
-  // the cover's own proportions and crops to fit. Title/dots sit on a strip
-  // over the bottom. Deliberately has no wh.Focusable item -- X/L1/R1 all
-  // reach OrbitLatest's own wh.onPressed handlers directly, instead of
-  // first "entering" a one-item tile.
-  function renderCoverFull(allItems, index, W, H, cfg) {
-    var item = allItems[index] || {};
+  // One jaquette tile within the cover-mode carousel. Always positioned at
+  // the inset rect's own left/top -- moved into place purely through
+  // transform (translateX/Y + rotate), never by changing left/top, so
+  // Animated can tween it smoothly (same approach meteo's widget uses for
+  // its rotating/falling icons). tx/ty/rot/op are either plain numbers
+  // (steady state) or Animated/interpolated nodes (mid-transition);
+  // Animated.View accepts both.
+  function CoverCard(props) {
+    var r = props.r, item = props.item;
+    return ce(Animated.View, {
+      style: [styles.coverInset, {
+        left: r.left, top: r.top, width: r.size, height: r.size, opacity: props.op,
+        transform: [{ translateX: props.tx }, { translateY: props.ty }, { rotate: props.rot }]
+      }]
+    }, Image && item && item.cover
+      ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: r.size, height: r.size, borderRadius: 10 } })
+      : null);
+  }
+
+  // Offsets for the carousel's "behind" slot, in px/deg -- same numbers as
+  // the approved canvas mockup (second card at left+18/top+10, rotated 13deg
+  // from the front card). The left slot mirrors this horizontally.
+  var COVER_DX = 18, COVER_DY = 10, COVER_DEG = 13;
+
+  // Cover mode, once a jaquette is available: the current cover sits inset,
+  // rounded 10px, front and flat; the next game in the catalog peeks out
+  // tilted behind it. The dashed-frame placeholder art is painted OVER the
+  // whole stack full-bleed -- it's a transparent PNG, so its dashed lines
+  // land on top as a decorative border instead of being hidden underneath.
+  // L1/R1 (via startCoverTransition in OrbitLatest) slide+tilt the stack:
+  // R1 sends the current cover sliding out to the left while the behind
+  // card straightens into the front slot; L1 is the mirror, pulling the
+  // previous game in from the left while the current one slides into the
+  // behind-right slot it'll occupy once it's the "next" game again.
+  // animT/trans come from the parent so the transition survives a re-render
+  // triggered by something unrelated (a catalog refetch, for instance).
+  function renderCoverStack(allItems, index, W, H, cfg, animT, trans) {
+    var total = allItems.length;
     var r = coverInsetRect(W, H);
+    var cards;
+    if (!trans) {
+      var curItem = allItems[index];
+      var nextItem = total > 1 ? allItems[(index + 1) % total] : null;
+      cards = [
+        nextItem ? ce(CoverCard, { key: 'r', r: r, item: nextItem, tx: COVER_DX, ty: COVER_DY, rot: COVER_DEG + 'deg', op: 0.9 }) : null,
+        ce(CoverCard, { key: 'c', r: r, item: curItem, tx: 0, ty: 0, rot: '0deg', op: 1 })
+      ];
+    } else if (trans.dir === 'next') {
+      cards = [
+        ce(CoverCard, {
+          key: 'in', r: r, item: trans.right,
+          tx: animT.interpolate({ inputRange: [0, 1], outputRange: [COVER_DX, 0] }),
+          ty: animT.interpolate({ inputRange: [0, 1], outputRange: [COVER_DY, 0] }),
+          rot: animT.interpolate({ inputRange: [0, 1], outputRange: [COVER_DEG + 'deg', '0deg'] }),
+          op: animT.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] })
+        }),
+        ce(CoverCard, {
+          key: 'out', r: r, item: trans.cur,
+          tx: animT.interpolate({ inputRange: [0, 1], outputRange: [0, -Math.round(r.size * 0.55)] }),
+          ty: 0,
+          rot: animT.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '-18deg'] }),
+          op: animT.interpolate({ inputRange: [0, 1], outputRange: [1, 0] })
+        })
+      ];
+    } else { // 'prev'
+      cards = [
+        trans.right ? ce(CoverCard, {
+          key: 'old', r: r, item: trans.right, tx: COVER_DX, ty: COVER_DY, rot: COVER_DEG + 'deg',
+          op: animT.interpolate({ inputRange: [0, 1], outputRange: [0.9, 0] })
+        }) : null,
+        ce(CoverCard, {
+          key: 'out', r: r, item: trans.cur,
+          tx: animT.interpolate({ inputRange: [0, 1], outputRange: [0, COVER_DX] }),
+          ty: animT.interpolate({ inputRange: [0, 1], outputRange: [0, COVER_DY] }),
+          rot: animT.interpolate({ inputRange: [0, 1], outputRange: ['0deg', COVER_DEG + 'deg'] }),
+          op: animT.interpolate({ inputRange: [0, 1], outputRange: [1, 0.9] })
+        }),
+        ce(CoverCard, {
+          key: 'in', r: r, item: trans.left,
+          tx: animT.interpolate({ inputRange: [0, 1], outputRange: [-COVER_DX, 0] }),
+          ty: animT.interpolate({ inputRange: [0, 1], outputRange: [COVER_DY, 0] }),
+          rot: animT.interpolate({ inputRange: [0, 1], outputRange: ['-' + COVER_DEG + 'deg', '0deg'] }),
+          op: animT.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] })
+        })
+      ];
+    }
     return ce(View, { style: styles.coverFill },
-      ce(View, { style: [styles.coverInset, { left: r.left, top: r.top, width: r.size, height: r.size }] },
-        Image && item.cover
-          ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: r.size, height: r.size, borderRadius: 10 } })
-          : null),
+      cards,
       Image ? ce(Image, { source: { uri: EMPTY_FRAME_URI }, resizeMode: 'cover', style: [styles.coverFrameBg, { width: W, height: H }] }) : null,
       // Widget's own logo/title, top-left, same stock wh.Title the list/grid
       // header uses -- cover mode is otherwise the only layout with no
@@ -471,8 +583,8 @@
       ce(View, { style: styles.coverHeader },
         ce(wh.Title, { iconId: cfg.iconId || 'game', style: { height: 28 } }, cfg.title || 'Orbit Store')
       ),
-      allItems.length > 1
-        ? ce(View, { style: styles.coverOverlay }, ce(CoverProgress, { index: index, total: allItems.length }))
+      total > 1
+        ? ce(View, { style: styles.coverOverlay }, ce(CoverProgress, { index: index, total: total }))
         : null
     );
   }
