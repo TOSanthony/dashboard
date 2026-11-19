@@ -1,12 +1,31 @@
-// sorties-jeux - prochaines sorties de jeux, via l'API RAWG (gratuite, cle
-// perso requise -- voir RAWG_API_KEY juste en dessous).
+// sorties-jeux - prochaines sorties de jeux, via l'API IGDB (par Twitch).
+//
+// RAWG (la premiere version de ce widget) a un souci d'inscription
+// recurrent et connu (erreurs serveur au moment de creer un compte,
+// signale par plein de monde ces derniers mois) -- remplace par IGDB, qui
+// passe par un compte Twitch (inscription nettement plus fiable).
+//
+// Pour obtenir les identifiants :
+//   1. Un compte Twitch (le compte normal suffit, mais l'authentification
+//      a deux facteurs doit etre activee dessus -- Parametres > Securite).
+//   2. https://dev.twitch.tv/console/apps/create -> cree une appli
+//      (categorie "Application Integration" ou "Website Integration",
+//      URL de redirection peu importe ici puisqu'on n'utilise que le flux
+//      "client credentials", ex. http://localhost).
+//   3. Copie le Client ID genere, et clique "New Secret" pour le Client
+//      Secret -- colle les deux ci-dessous.
+//
+// Comme pour RAWG, pas de champ de texte libre possible dans les reglages
+// du Hub (seuls "choice"/"toggle" existent) donc ces deux valeurs se
+// collent ici une bonne fois.
 //
 // Fond transparent comme meteo (pas de mat peinte). Plateforme et fenetre
-// de temps choisies via config.json "settings" -> popup Options (Start)
-// standard, meme idiome que meteo/orbit-latest.
+// de temps choisies via config.json "settings" -> popup Options (Start),
+// meme idiome que meteo/orbit-latest.
 //
 // NOTE non testee sur console : on suppose, comme pour meteo, un acces
-// reseau Internet normal (api.rawg.io), pas seulement 127.0.0.1.
+// reseau Internet normal (id.twitch.tv + api.igdb.com), pas seulement
+// 127.0.0.1.
 (function (wh) {
   var React = wh.React;
   var View = wh.View;
@@ -15,47 +34,89 @@
   var ce = React.createElement;
   var F = wh.FontSizePS;
 
-  // ---------------------------------------------------------------------
-  // RAWG exige une cle API sur CHAQUE requete (sinon elle peut etre bannie).
-  // Pas de champ de texte libre possible dans les reglages du Hub (seuls
-  // "choice"/"toggle" existent), donc la cle se colle ici une bonne fois --
-  // gratuite et instantanee sur https://rawg.io/apidocs.
-  var RAWG_API_KEY = 'COLLE_TA_CLE_RAWG_ICI';
+  var IGDB_CLIENT_ID = 'COLLE_TON_CLIENT_ID_TWITCH_ICI';
+  var IGDB_CLIENT_SECRET = 'COLLE_TON_CLIENT_SECRET_TWITCH_ICI';
 
-  // Id de plateforme RAWG -- a verifier sur le compte reel (GET
-  // https://api.rawg.io/api/platforms?key=... s'ils donnent des resultats
-  // qui ne correspondent pas a la plateforme choisie dans les reglages).
+  // Id de plateforme IGDB (different du systeme RAWG) -- liste complete
+  // sur https://api-docs.igdb.com/#platform si besoin de verifier/ajouter.
   var PLATFORM_IDS = {
-    ps5: 187, ps4: 18, switch: 7, pc: 4, xboxseries: 186
+    ps5: 167, ps4: 48, switch: 130, pc: 6, xboxseries: 169
   };
 
-  function pad2(n) { return n < 10 ? '0' + n : String(n); }
-  function isoOf(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
-  function todayIso() { return isoOf(new Date()); }
-  function addDaysIso(iso, days) {
-    var d = new Date(iso + 'T00:00:00');
-    d.setDate(d.getDate() + days);
-    return isoOf(d);
+  // ---------------------------------------------------------------------
+  // Jeton Twitch (client_credentials) : valable des semaines, mis en cache
+  // en memoire (variable de module -- le runtime JS du hub tourne en
+  // continu, pas besoin de persister sur disque).
+  var tokenCache = { token: null, expiresAt: 0 };
+
+  function fetchToken() {
+    var url = 'https://id.twitch.tv/oauth2/token?client_id=' + encodeURIComponent(IGDB_CLIENT_ID) +
+      '&client_secret=' + encodeURIComponent(IGDB_CLIENT_SECRET) +
+      '&grant_type=client_credentials';
+    return fetch(url, { method: 'POST' })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (!j || !j.access_token) {
+          throw new Error((j && (j.message || j.error)) || 'reponse Twitch invalide');
+        }
+        tokenCache.token = j.access_token;
+        // Marge de 60s pour ne jamais utiliser un jeton perime de justesse.
+        tokenCache.expiresAt = Date.now() + (Math.max(0, (j.expires_in || 0) - 60)) * 1000;
+        return tokenCache.token;
+      });
   }
-  function releasesUrl(platformId, horizonDays) {
-    var from = todayIso(), to = addDaysIso(from, horizonDays);
-    return 'https://api.rawg.io/api/games?key=' + encodeURIComponent(RAWG_API_KEY) +
-      '&dates=' + from + ',' + to +
-      '&platforms=' + platformId +
-      '&ordering=released&page_size=20';
+
+  function getToken() {
+    if (tokenCache.token && Date.now() < tokenCache.expiresAt) {
+      return Promise.resolve(tokenCache.token);
+    }
+    return fetchToken();
+  }
+
+  // ---------------------------------------------------------------------
+  function todayStartUnix() {
+    var n = new Date();
+    return Math.floor(new Date(n.getFullYear(), n.getMonth(), n.getDate()).getTime() / 1000);
+  }
+  function addDaysUnix(u, days) { return u + days * 86400; }
+
+  function queryReleases(platformId, horizonDays, token) {
+    var from = todayStartUnix(), to = addDaysUnix(from, horizonDays);
+    var body = 'fields date,game.name,game.cover.image_id;' +
+      ' where platform = ' + platformId +
+      ' & date >= ' + from + ' & date <= ' + to +
+      ' & game != null & game.cover != null;' +
+      ' sort date asc; limit 40;';
+    return fetch('https://api.igdb.com/v4/release_dates', {
+      method: 'POST',
+      headers: {
+        'Client-ID': IGDB_CLIENT_ID,
+        Authorization: 'Bearer ' + token,
+        Accept: 'application/json',
+        'Content-Type': 'text/plain'
+      },
+      body: body
+    }).then(function (r) {
+      if (r.status === 401) { var e = new Error('401'); e.unauthorized = true; throw e; }
+      return r.json();
+    });
   }
 
   // "Aujourd'hui" / "Demain" / "Dans N jours" / date FR pour le reste.
   var MONTHS_FR = ['janv.', 'fevr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'aout', 'sept.', 'oct.', 'nov.', 'dec.'];
-  function daysLabel(iso) {
-    var now = new Date(), rel = new Date(iso + 'T00:00:00');
-    var ms = rel.setHours(0, 0, 0, 0) - new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    var n = Math.round(ms / 86400000);
+  function daysLabel(dateUnix) {
+    var now = new Date(), rel = new Date(dateUnix * 1000);
+    var relDay = new Date(rel.getFullYear(), rel.getMonth(), rel.getDate()).getTime();
+    var today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    var n = Math.round((relDay - today) / 86400000);
     if (n === 0) return "Aujourd'hui";
     if (n === 1) return 'Demain';
     if (n > 1 && n <= 13) return 'Dans ' + n + ' j';
-    var d = new Date(iso + 'T00:00:00');
-    return d.getDate() + ' ' + MONTHS_FR[d.getMonth()];
+    return rel.getDate() + ' ' + MONTHS_FR[rel.getMonth()];
+  }
+
+  function coverUrl(imageId) {
+    return 'https://images.igdb.com/igdb/image/upload/t_cover_big/' + imageId + '.jpg';
   }
 
   // ---------------------------------------------------------------------
@@ -66,24 +127,39 @@
     React.useEffect(function () {
       mounted.current = true;
       var platformId = PLATFORM_IDS[platformKey] || PLATFORM_IDS.ps5;
-      function load() {
-        fetch(releasesUrl(platformId, horizonDays), { headers: { Accept: 'application/json' } })
-          .then(function (r) { return r.json(); })
+      function load(retried) {
+        getToken()
+          .then(function (token) { return queryReleases(platformId, horizonDays, token); })
           .then(function (j) {
             if (!mounted.current) return;
-            if (j && j.detail) { setErr(String(j.detail)); return; }
-            var results = (j && j.results) || [];
-            setItems(results.map(function (g) {
-              return { id: g.id, title: g.name, released: g.released, cover: g.background_image };
-            }));
+            if (!Array.isArray(j)) { setErr(String((j && (j.message || j.error)) || 'reponse IGDB invalide')); return; }
+            var seen = {}, out = [];
+            for (var i = 0; i < j.length; i++) {
+              var row = j[i], g = row.game;
+              if (!g || seen[g.id]) continue;
+              seen[g.id] = true;
+              out.push({
+                id: g.id,
+                title: g.name,
+                released: row.date,
+                cover: (g.cover && g.cover.image_id) ? coverUrl(g.cover.image_id) : null
+              });
+            }
+            setItems(out);
             setErr(null);
           })
           .catch(function (e) {
-            if (mounted.current) setErr((e && e.message) || 'fetch failed');
+            if (!mounted.current) return;
+            if (e && e.unauthorized && !retried) {
+              tokenCache.token = null;
+              load(true);
+              return;
+            }
+            setErr((e && e.message) || 'fetch failed');
           });
       }
-      load();
-      var id = setInterval(load, 60 * 60 * 1000);
+      load(false);
+      var id = setInterval(function () { load(false); }, 60 * 60 * 1000);
       return function () { mounted.current = false; clearInterval(id); };
     }, [platformKey, horizonDays]);
     return { items: items, err: err };

@@ -1,7 +1,7 @@
 {
   "id": "sorties-jeux",
   "title": "Sorties de jeux",
-  "description": "Prochaines sorties de jeux (plateforme au choix), via l'API RAWG. Tailles DEFAULT/LARGE/FULL.",
+  "description": "Prochaines sorties de jeux (plateforme au choix), via l'API IGDB (Twitch). Tailles DEFAULT/LARGE/FULL.",
   "iconId": "date_time",
   "size": 1,
   "settings": [
