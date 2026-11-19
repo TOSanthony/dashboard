@@ -524,21 +524,35 @@
   // around the pivot instead of around its own center. rot/op are either
   // plain numbers (steady state) or Animated/interpolated nodes (mid-
   // transition); Animated.View accepts both.
+  // Big enough that a card can never swing past its edge no matter the
+  // angle: distance pivot-to-card-center is ~160px, plus the card's own
+  // half-diagonal (~179px at 253x253), so 350px of half-box is comfortable
+  // margin even mid-transition (the exit card briefly overshoots to
+  // +/-35deg).
+  var FAN_BOX = 700;
+
   function FanCard(props) {
     var r = props.r, item = props.item;
     // Every dimension fed to a rotated view gets rounded to a whole pixel
     // (same rule as the clock widget's hands) -- size is 253 (odd), so
-    // size/2 lands on a half pixel, and left on that fractional a corner-
-    // radius/overflow:hidden silently stops clipping on this runtime
-    // (confirmed on-console: the rounded corners just didn't show).
+    // size/2 lands on a half pixel.
     var size = Math.round(r.size);
     var pivotX = Math.round(r.left + FAN_PIVOT_X_RATIO * r.size);
     var pivotY = Math.round(r.top + FAN_PIVOT_Y_RATIO * r.size) + (props.pivotYAdjust || 0);
     // Card's center at rest (0deg), relative to the pivot.
     var offX = Math.round(r.left + r.size / 2 - pivotX);
     var offY = Math.round(r.top + r.size / 2 - pivotY);
-    var left = Math.round(offX - size / 2), top = Math.round(offY - size / 2);
-    return ce(Animated.View, { style: { position: 'absolute', left: pivotX, top: pivotY, width: 0, height: 0, transform: [{ rotate: props.rot }] } },
+    // The rotated wrapper must be a real, properly sized box -- not the
+    // old zero-size pivot wrapper. Confirmed on-console: with a 0x0
+    // rotated parent, the inner card's borderRadius/overflow:hidden never
+    // clipped at all (square corners on every card, including the
+    // un-rotated center one), only the position was right. horloge's
+    // clock hands use this same pivot technique but with a real sized box
+    // (see Hand in horloge/widget.js) -- mirroring that here is what
+    // actually gets the rounded corners to render.
+    var half = FAN_BOX / 2;
+    var left = Math.round(half + offX - size / 2), top = Math.round(half + offY - size / 2);
+    return ce(Animated.View, { style: { position: 'absolute', left: pivotX - half, top: pivotY - half, width: FAN_BOX, height: FAN_BOX, transform: [{ rotate: props.rot }] } },
       ce(Animated.View, {
         style: [styles.coverInset, { left: left, top: top, width: size, height: size, opacity: props.op }]
       }, Image && item && item.cover
