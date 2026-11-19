@@ -84,19 +84,24 @@
   // inde du jour (il en sort plusieurs par semaine rien que sur PS5) -- vu
   // qu'on n'affiche de toute facon que les 4/7 premiers tries par date,
   // ca remplissait systematiquement les emplacements avec "ce qui sort
-  // aujourd'hui", quelle que soit la fenetre choisie. Un essai avec
-  // "game.hypes > 0" (nb de "follow" avant sortie) donnait une liste VIDE
-  // en test reel -- la plupart des entrees IGDB n'ont pas de hypes du tout
-  // (valeur null, pas 0), donc ce filtre les excluait quasiment toutes.
-  // Retire. On garde seulement category=0 (jeu complet, pas DLC/bundle),
-  // qui ne risque pas ce probleme (presque tous les jeux l'ont).
+  // aujourd'hui", quelle que soit la fenetre choisie.
+  //
+  // Deux essais de filtre COTE REQUETE IGDB (where ... game.hypes > 0, puis
+  // where ... game.category = 0) ont chacun fini par renvoyer une liste
+  // VIDE en test reel -- impossible de verifier a l'avance comment IGDB
+  // traite un filtre sur un champ expanse (game.xxx) absent du "fields" de
+  // l'objet principal (release_dates), ou les valeurs nulles, sans y avoir
+  // acces. Pour ne plus casser la recherche a l'aveugle : plus AUCUN filtre
+  // dans la requete IGDB elle-meme -- on recupere tout (comme au tout
+  // premier essai, qui marchait), et le filtre DLC/bundle (category=0) se
+  // fait maintenant COTE CLIENT, en Javascript, sur le resultat deja recu
+  // (voir useReleases ci-dessous) -- aucun risque de requete invalide.
   function queryReleases(platformId, horizonDays, token) {
     var from = todayStartUnix(), to = addDaysUnix(from, horizonDays);
-    var body = 'fields date,game.name,game.cover.image_id;' +
+    var body = 'fields date,game.name,game.cover.image_id,game.category;' +
       ' where platform = ' + platformId +
       ' & date >= ' + from + ' & date <= ' + to +
-      ' & game != null & game.cover != null' +
-      ' & game.category = 0;' +
+      ' & game != null & game.cover != null;' +
       ' sort date asc; limit 40;';
     return fetch('https://api.igdb.com/v4/release_dates', {
       method: 'POST',
@@ -148,6 +153,11 @@
             for (var i = 0; i < j.length; i++) {
               var row = j[i], g = row.game;
               if (!g || seen[g.id]) continue;
+              // DLC/extension/bundle... exclus (category 0 = jeu complet) ;
+              // un category absent/non precise (undefined) est garde plutot
+              // qu'exclu par prudence -- mieux vaut un faux positif qu'une
+              // liste qui se retrouve vide a cause d'une donnee manquante.
+              if (g.category != null && g.category !== 0) continue;
               seen[g.id] = true;
               out.push({
                 id: g.id,
