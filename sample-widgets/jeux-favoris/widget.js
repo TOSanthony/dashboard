@@ -55,7 +55,14 @@
       mounted.current = true;
       function load() {
         fetch('http://127.0.0.1:8098/__apps', { headers: { Accept: 'application/json' } })
-          .then(function (r) { return r.json(); })
+          .then(function (r) {
+            // Sur un 500 (app.db illisible cote payload, voir wh.log) le
+            // corps est vide : r.json() planterait avec un message cryptique
+            // ("Unexpected end of input"). On distingue ce cas pour afficher
+            // un message clair, et on log le code pour le debug sur console.
+            if (!r.ok) { log('GET /__apps -> ' + r.status); throw new Error('serveur /__apps: ' + r.status); }
+            return r.json();
+          })
           .then(function (j) {
             if (!mounted.current) return;
             var list = Array.isArray(j) ? j.slice() : [];

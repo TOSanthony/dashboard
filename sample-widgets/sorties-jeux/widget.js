@@ -80,12 +80,23 @@
   }
   function addDaysUnix(u, days) { return u + days * 86400; }
 
+  // IGDB liste aussi bien les gros titres que la moindre petite sortie
+  // inde du jour (il en sort plusieurs par semaine rien que sur PS5) -- vu
+  // qu'on n'affiche de toute facon que les 4/7 premiers tries par date,
+  // ca remplissait systematiquement les emplacements avec "ce qui sort
+  // aujourd'hui", quelle que soit la fenetre choisie (30j/3mois/6mois
+  // donnent alors la meme liste). On filtre donc aux jeux avec un minimum
+  // d'anticipation (game.hypes = nb de "follow" avant sortie sur IGDB) et
+  // on exclut DLC/bundles (category=0 = jeu complet) pour ne garder que
+  // les sorties qui comptent -- NON VERIFIE sur de vraies donnees IGDB, le
+  // seuil (hypes > 0) est a ajuster si la liste reste vide ou trop fournie.
   function queryReleases(platformId, horizonDays, token) {
     var from = todayStartUnix(), to = addDaysUnix(from, horizonDays);
     var body = 'fields date,game.name,game.cover.image_id;' +
       ' where platform = ' + platformId +
       ' & date >= ' + from + ' & date <= ' + to +
-      ' & game != null & game.cover != null;' +
+      ' & game != null & game.cover != null' +
+      ' & game.category = 0 & game.hypes > 0;' +
       ' sort date asc; limit 40;';
     return fetch('https://api.igdb.com/v4/release_dates', {
       method: 'POST',
