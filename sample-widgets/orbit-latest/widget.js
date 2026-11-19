@@ -160,8 +160,10 @@
     // "Orbit Store" branding at all, unlike every stock Welcome Hub widget.
     // No backdrop here on purpose: just the logo+title floating over the
     // jaquette, like the top-left corner of the other sizes.
-    coverHeader: { position: 'absolute', left: 0, right: 0, top: 0,
-                   paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8 }
+    // Same 16px on every side as the other widgets' own padded body (e.g.
+    // horloge's styles.body), so the icon+title sits at the exact same
+    // spot and size as every other stock widget's header.
+    coverHeader: { position: 'absolute', left: 0, right: 0, top: 0, padding: 16 }
   });
 
   // A per-game catalog row: X (or press) launches Orbit Store. wh.Focusable
@@ -619,7 +621,7 @@
       // header uses -- cover mode is otherwise the only layout with no
       // "Orbit Store" branding at all.
       ce(View, { style: styles.coverHeader },
-        ce(wh.Title, { iconId: cfg.iconId || 'game', style: { height: 28 } }, cfg.title || 'Orbit Store')
+        ce(wh.Title, { iconId: cfg.iconId || 'game' }, cfg.title || 'Orbit Store')
       ),
       total > 1
         ? ce(View, { style: styles.coverOverlay }, ce(CoverProgress, { index: index, total: total }))
@@ -637,7 +639,7 @@
       Image ? ce(Image, { source: { uri: EMPTY_FRAME_URI }, resizeMode: 'cover', style: [styles.coverFrameBg, { width: W, height: H }] }) : null,
       Image ? ce(Image, { source: { uri: EMPTY_ICON_URI }, resizeMode: 'contain', style: [styles.coverEmptyIcon, { left: r.left, top: r.top, width: r.size, height: r.size }] }) : null,
       ce(View, { style: styles.coverHeader },
-        ce(wh.Title, { iconId: cfg.iconId || 'game', style: { height: 28 } }, cfg.title || 'Orbit Store')
+        ce(wh.Title, { iconId: cfg.iconId || 'game' }, cfg.title || 'Orbit Store')
       ),
       ce(Label, { style: [styles.coverEmptyStatus, styles.small, styles.dim], numberOfLines: 2 }, statusLabel)
     );
