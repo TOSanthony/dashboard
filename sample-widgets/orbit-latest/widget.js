@@ -549,6 +549,19 @@
   // swings in to front; L1 is the exact mirror. animT/trans come from the
   // parent so the transition survives a re-render triggered by something
   // unrelated (a catalog refetch, for instance).
+  function fanKey(item, fallback) {
+    // Keyed by the game itself, not by its role in the fan (left/center/
+    // right, or exit/toLeft/toCenter mid-transition). A role-based key
+    // changes on every L1/R1 press, which forces React to unmount and
+    // remount the Image -- it has to re-fetch from the local asset server,
+    // and the plain backgroundColor of the frame (navy) shows through for
+    // that split second, i.e. the "goes blue" flash. Keying by identity
+    // keeps the same Image instance (and its already-loaded texture)
+    // mounted straight through the animation; only its position/rotation
+    // changes.
+    return (item && (item.id || item.titleId)) || fallback;
+  }
+
   function renderCoverStack(allItems, index, W, H, cfg, animT, trans) {
     var total = allItems.length;
     var r = coverInsetRect(W, H);
@@ -558,24 +571,24 @@
       var nextItem = total > 1 ? allItems[(index + 1) % total] : null;
       var prevItem = total > 1 ? allItems[(index - 1 + total) % total] : null;
       cards = [
-        prevItem ? ce(FanCard, { key: 'l', r: r, item: prevItem, rot: -FAN_DEG + 'deg', op: 0.9, pivotYAdjust: FAN_LEFT_PIVOT_Y_ADJUST }) : null,
-        nextItem ? ce(FanCard, { key: 'r', r: r, item: nextItem, rot: FAN_DEG + 'deg', op: 0.9 }) : null,
-        ce(FanCard, { key: 'c', r: r, item: curItem, rot: '0deg', op: 1 })
+        prevItem ? ce(FanCard, { key: fanKey(prevItem, 'l'), r: r, item: prevItem, rot: -FAN_DEG + 'deg', op: 0.9, pivotYAdjust: FAN_LEFT_PIVOT_Y_ADJUST }) : null,
+        nextItem ? ce(FanCard, { key: fanKey(nextItem, 'r'), r: r, item: nextItem, rot: FAN_DEG + 'deg', op: 0.9 }) : null,
+        ce(FanCard, { key: fanKey(curItem, 'c'), r: r, item: curItem, rot: '0deg', op: 1 })
       ];
     } else if (trans.dir === 'next') {
       cards = [
         trans.left ? ce(FanCard, {
-          key: 'exit', r: r, item: trans.left,
+          key: fanKey(trans.left, 'exit'), r: r, item: trans.left,
           rot: animT.interpolate({ inputRange: [0, 1], outputRange: [-FAN_DEG + 'deg', (-FAN_DEG - 15) + 'deg'] }),
           op: animT.interpolate({ inputRange: [0, 1], outputRange: [0.9, 0] })
         }) : null,
         ce(FanCard, {
-          key: 'toLeft', r: r, item: trans.cur,
+          key: fanKey(trans.cur, 'toLeft'), r: r, item: trans.cur,
           rot: animT.interpolate({ inputRange: [0, 1], outputRange: ['0deg', -FAN_DEG + 'deg'] }),
           op: animT.interpolate({ inputRange: [0, 1], outputRange: [1, 0.9] })
         }),
         ce(FanCard, {
-          key: 'toCenter', r: r, item: trans.right,
+          key: fanKey(trans.right, 'toCenter'), r: r, item: trans.right,
           rot: animT.interpolate({ inputRange: [0, 1], outputRange: [FAN_DEG + 'deg', '0deg'] }),
           op: animT.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] })
         })
@@ -583,17 +596,17 @@
     } else { // 'prev' -- exact mirror of 'next'
       cards = [
         trans.right ? ce(FanCard, {
-          key: 'exit', r: r, item: trans.right,
+          key: fanKey(trans.right, 'exit'), r: r, item: trans.right,
           rot: animT.interpolate({ inputRange: [0, 1], outputRange: [FAN_DEG + 'deg', (FAN_DEG + 15) + 'deg'] }),
           op: animT.interpolate({ inputRange: [0, 1], outputRange: [0.9, 0] })
         }) : null,
         ce(FanCard, {
-          key: 'toRight', r: r, item: trans.cur,
+          key: fanKey(trans.cur, 'toRight'), r: r, item: trans.cur,
           rot: animT.interpolate({ inputRange: [0, 1], outputRange: ['0deg', FAN_DEG + 'deg'] }),
           op: animT.interpolate({ inputRange: [0, 1], outputRange: [1, 0.9] })
         }),
         ce(FanCard, {
-          key: 'toCenter', r: r, item: trans.left,
+          key: fanKey(trans.left, 'toCenter'), r: r, item: trans.left,
           rot: animT.interpolate({ inputRange: [0, 1], outputRange: [-FAN_DEG + 'deg', '0deg'] }),
           op: animT.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] })
         })
