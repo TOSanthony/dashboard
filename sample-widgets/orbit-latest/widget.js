@@ -592,7 +592,8 @@
   // pixels (a plain top-offset on the un-rotated wrapper, so it's a pure
   // screen-space shift that doesn't disturb the left alignment) fixes it
   // without touching the right side, which wasn't reported as off.
-  var FAN_LEFT_PIVOT_Y_ADJUST = 10;
+  // (Still reading a touch high at 10 -- bumped to 20.)
+  var FAN_LEFT_PIVOT_Y_ADJUST = 20;
 
   // Cover mode, once a jaquette is available: three games fanned out from
   // the shared pivot above -- current flat and up front, the next game
