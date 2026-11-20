@@ -258,16 +258,39 @@ static void wh_watch_reinstall(uint64_t new_gen, uint64_t* cur_gen){
   if (pid < 0) { wh_flog("watch", "widgets changed but SceShellUI not found, will retry"); return; }
   int reload = 0; uint64_t installed_gen = 0;
   int rc = wh_install_once_g(pid, 0, &reload, &installed_gen);
-  if (rc == 0) {
-    *cur_gen = installed_gen;
-    wh_flog("watch", "widgets changed on disk: re-installed (gen %016llx)", (unsigned long long)installed_gen);
-    notify("WHBridge: widgets refreshed\nChange detected and re-installed automatically.");
-  } else {
+  if (rc != 0) {
     wh_flog("watch", "widgets changed on disk but re-install failed (rc=%d), will retry", rc);
     /* Don't update *cur_gen: keep retrying every tick until it succeeds,
      * rather than silently giving up on this change. new_gen is unused on
      * this path on purpose. */
     (void)new_gen;
+    return;
+  }
+  wh_flog("watch", "widgets changed on disk: re-installed (gen %016llx)", (unsigned long long)installed_gen);
+  /* The new/edited widget is now baked into the hook, but the Hub already
+   * evaluated its JS before this re-install landed, so it won't actually
+   * show up until something makes the Hub re-evaluate -- restart it, same
+   * as the fresh-install path in main.c, instead of leaving the user to
+   * switch profiles by hand every time they touch a widget file. Don't
+   * update *cur_gen until the restart+re-attach into the fresh process
+   * also succeeds: the old pid is dead either way once we kill it, so a
+   * partial success here must still look like "not done yet" to the next
+   * tick, or it would never retry a failed re-attach. */
+  pid_t newpid = wh_restart_shellui(pid);
+  if (newpid < 0) {
+    wh_flog("watch", "SceShellUI did not reappear after restart, will retry next tick");
+    notify("WHBridge: widgets refreshed\nShellUI restart failed -- retrying.");
+    return;
+  }
+  int reload2 = 0; uint64_t gen2 = 0;
+  int rc2 = wh_install_once_g(newpid, 0, &reload2, &gen2);
+  if (rc2 == 0) {
+    *cur_gen = gen2;
+    wh_flog("watch", "re-attached to fresh SceShellUI (pid %d) after widget change", (int)newpid);
+    notify("WHBridge: widgets refreshed\nShellUI restarted, change is live.");
+  } else {
+    wh_flog("watch", "restarted SceShellUI but re-attach failed (rc=%d), will retry next tick", rc2);
+    notify("WHBridge: widgets refreshed\nShellUI restarted but re-attach failed, retrying.");
   }
 }
 /* Serve until a newer install bumps the generation; never returns. */

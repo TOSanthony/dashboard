@@ -62,12 +62,7 @@ int main(void){
   const char* rsum = "";
   if (rc == 0 && !reload && !want_dump) {
     wh_flog("installer", "restarting SceShellUI (pid %d) to apply the hook immediately", (int)pid);
-    kill(pid, SIGKILL);
-    pid_t newpid = -1;
-    for (int tries = 0; tries < 40 && newpid < 0; tries++) {  /* ~4s budget */
-      usleep(100000);
-      newpid = find_pid("SceShellUI");
-    }
+    pid_t newpid = wh_restart_shellui(pid);
     if (newpid < 0) {
       wh_flog("installer", "SceShellUI did not reappear after restart");
       rsum = "\nShellUI: restart failed (killed but did not come back)";
