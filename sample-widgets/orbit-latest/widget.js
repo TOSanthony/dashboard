@@ -601,9 +601,11 @@
   // art -- it lines up with the left dashed edge but doesn't reach down to
   // the bottom one. Confirmed on-console; nudging it down a few pixels
   // (FanCard's extraY, a plain post-rotation screen-space shift) fixes it
-  // without touching the right side, which wasn't reported as off.
-  // (Still reading high at 10, then at 20 -- bumped to 40.)
-  var FAN_LEFT_PIVOT_Y_ADJUST = 40;
+  // without touching the right side, which wasn't reported as off. 10px
+  // was right all along -- the 20/40 bumps were chasing a different bug
+  // (extraY snapping in only once a transition ended, fixed above by
+  // animating it instead); confirmed on-console at 10 with that fix in.
+  var FAN_LEFT_PIVOT_Y_ADJUST = 10;
 
   // Cover mode, once a jaquette is available: three games fanned out from
   // the shared pivot above -- current flat and up front, the next game
