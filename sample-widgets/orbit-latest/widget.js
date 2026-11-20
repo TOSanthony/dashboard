@@ -568,17 +568,28 @@
     var size = Math.round(r.size);
     var left = Math.round(r.left), top = Math.round(r.top);
     var pivotX = Math.round(left + FAN_PIVOT_X_RATIO * r.size);
-    var pivotY = Math.round(top + FAN_PIVOT_Y_RATIO * r.size) + (props.pivotYAdjust || 0);
+    var pivotY = Math.round(top + FAN_PIVOT_Y_RATIO * r.size);
     // Vector from this card's own (un-rotated) center to the pivot.
     var dx = Math.round(pivotX - (left + size / 2));
     var dy = Math.round(pivotY - (top + size / 2));
+    // extraY is a plain additional screen-space nudge applied AFTER the
+    // pivot rotation, not folded into dx/dy: dx/dy are plain numbers
+    // computed once per render, so a prop that changes between the
+    // transition's last frame and the following steady-state render would
+    // otherwise snap instantly. Appending it as its own transform step
+    // lets it be an Animated-interpolated value exactly like `rot`/`op`
+    // already are (RN's Animated.View accepts a mix of static and
+    // Animated entries in the same transform array), so it can ramp in
+    // step with the rotation instead of popping in once the rotation
+    // settles.
     return ce(Animated.View, {
       style: [styles.coverInset, {
         left: left, top: top, width: size, height: size, opacity: props.op,
         transform: [
           { translateX: dx }, { translateY: dy },
           { rotate: props.rot },
-          { translateX: -dx }, { translateY: -dy }
+          { translateX: -dx }, { translateY: -dy },
+          { translateY: props.extraY || 0 }
         ]
       }]
     }, Image && item && item.cover
@@ -588,9 +599,8 @@
 
   // The left (-20deg) card reads slightly high against the dashed frame
   // art -- it lines up with the left dashed edge but doesn't reach down to
-  // the bottom one. Confirmed on-console; nudging its pivot down a few
-  // pixels (a plain top-offset on the un-rotated wrapper, so it's a pure
-  // screen-space shift that doesn't disturb the left alignment) fixes it
+  // the bottom one. Confirmed on-console; nudging it down a few pixels
+  // (FanCard's extraY, a plain post-rotation screen-space shift) fixes it
   // without touching the right side, which wasn't reported as off.
   // (Still reading high at 10, then at 20 -- bumped to 40.)
   var FAN_LEFT_PIVOT_Y_ADJUST = 40;
@@ -628,7 +638,7 @@
       var nextItem = total > 1 ? allItems[(index + 1) % total] : null;
       var prevItem = total > 1 ? allItems[(index - 1 + total) % total] : null;
       cards = [
-        prevItem ? ce(FanCard, { key: fanKey(prevItem, 'l'), r: r, item: prevItem, rot: -FAN_DEG + 'deg', op: 0.9, pivotYAdjust: FAN_LEFT_PIVOT_Y_ADJUST }) : null,
+        prevItem ? ce(FanCard, { key: fanKey(prevItem, 'l'), r: r, item: prevItem, rot: -FAN_DEG + 'deg', op: 0.9, extraY: FAN_LEFT_PIVOT_Y_ADJUST }) : null,
         nextItem ? ce(FanCard, { key: fanKey(nextItem, 'r'), r: r, item: nextItem, rot: FAN_DEG + 'deg', op: 0.9 }) : null,
         ce(FanCard, { key: fanKey(curItem, 'c'), r: r, item: curItem, rot: '0deg', op: 1 })
       ];
@@ -637,12 +647,14 @@
         trans.left ? ce(FanCard, {
           key: fanKey(trans.left, 'exit'), r: r, item: trans.left,
           rot: animT.interpolate({ inputRange: [0, 1], outputRange: [-FAN_DEG + 'deg', (-FAN_DEG - 15) + 'deg'] }),
-          op: animT.interpolate({ inputRange: [0, 1], outputRange: [0.9, 0] })
+          op: animT.interpolate({ inputRange: [0, 1], outputRange: [0.9, 0] }),
+          extraY: FAN_LEFT_PIVOT_Y_ADJUST
         }) : null,
         ce(FanCard, {
           key: fanKey(trans.cur, 'toLeft'), r: r, item: trans.cur,
           rot: animT.interpolate({ inputRange: [0, 1], outputRange: ['0deg', -FAN_DEG + 'deg'] }),
-          op: animT.interpolate({ inputRange: [0, 1], outputRange: [1, 0.9] })
+          op: animT.interpolate({ inputRange: [0, 1], outputRange: [1, 0.9] }),
+          extraY: animT.interpolate({ inputRange: [0, 1], outputRange: [0, FAN_LEFT_PIVOT_Y_ADJUST] })
         }),
         ce(FanCard, {
           key: fanKey(trans.right, 'toCenter'), r: r, item: trans.right,
@@ -665,7 +677,8 @@
         ce(FanCard, {
           key: fanKey(trans.left, 'toCenter'), r: r, item: trans.left,
           rot: animT.interpolate({ inputRange: [0, 1], outputRange: [-FAN_DEG + 'deg', '0deg'] }),
-          op: animT.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] })
+          op: animT.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }),
+          extraY: animT.interpolate({ inputRange: [0, 1], outputRange: [FAN_LEFT_PIVOT_Y_ADJUST, 0] })
         })
       ];
     }
