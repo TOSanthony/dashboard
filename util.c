@@ -52,16 +52,6 @@ pid_t find_pid(const char *comm) {
   free(buf); return found;
 }
 
-pid_t wh_restart_shellui(pid_t pid) {
-  kill(pid, SIGKILL);
-  pid_t newpid = -1;
-  for (int tries = 0; tries < 40 && newpid < 0; tries++) {  /* ~4s budget */
-    usleep(100000);
-    newpid = find_pid("SceShellUI");
-  }
-  return newpid;
-}
-
 int wh_name_ok(const char* s, size_t n){
   if (!n || n > 64 || s[0] == '.') return 0;
   for (size_t i = 0; i < n; i++){

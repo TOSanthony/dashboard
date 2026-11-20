@@ -31,13 +31,6 @@ void notify(const char *fmt, ...);
  * (SceShellUI, typically). Returns -1 if not found. */
 pid_t find_pid(const char *comm);
 
-/* Kills `pid` (SceShellUI) and waits (up to a few seconds) for the system
- * supervisor to relaunch it, so a hook installed right after can land in
- * the fresh process before it evaluates its own JS for the first time --
- * same effect as a manual PS5 profile switch, without the manual part.
- * Returns the new pid, or -1 if it never came back. */
-pid_t wh_restart_shellui(pid_t pid);
-
 /* Validates a widget-folder-relative file name: no path traversal, only
  * [A-Za-z0-9._-]. Returns 1 if safe to serve/reference, 0 otherwise. */
 int wh_name_ok(const char* s, size_t n);
