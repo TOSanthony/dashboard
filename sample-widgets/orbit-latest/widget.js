@@ -109,6 +109,11 @@
     } catch (e) {}
   }
   var MAT = '#17191ef0';
+  // The visible circle (the image) is always drawn at its full requested
+  // size -- the selection ring is extra space the frame adds AROUND it
+  // (frame = img + RING_THICKNESS*2), not space eaten out of the image, so
+  // a 122px circle stays 122px whether or not it's selected.
+  var RING_THICKNESS = 7;
 
   var styles = wh.StyleSheet.create({
     card: { borderRadius: 16, overflow: 'hidden' },
@@ -175,13 +180,12 @@
 
 
   // A grid cell: confirmed-working `selected`-driven ring/frame mechanism,
-  // round avatars, no title bar. The ring is the white gridFrame showing
-  // through the gap between the frame's edge and the image inside it, so
-  // its thickness is just that gap -- widened here (was 3px/side) to match
-  // the mockup's noticeably thicker ring.
+  // round avatars, no title bar. `img` is the always-fixed visible circle
+  // size; `slot` (the frame/Focusable hit area) is img + RING_THICKNESS*2,
+  // so the ring is extra space the frame adds AROUND the image rather than
+  // space eaten out of it -- the image itself never shrinks.
   function GridCell(props) {
-    var item = props.item, slot = props.size;
-    var img = Math.max(28, slot - 14);
+    var item = props.item, slot = props.size, img = props.img;
     return ce(wh.Focusable, {
       onPress: props.onPress,
       style: { width: slot, height: slot, alignItems: 'center', justifyContent: 'center' }
@@ -395,12 +399,16 @@
   // depending on how many games there are or how tall the tile happens to
   // be -- arrows/L1/R1 already move between cells by screen position, the
   // SDK's own wh.Focusable behaviour.
-  function renderGrid(allItems, innerW, innerH, openItem, columns, rows, fixedSize) {
-    var cellSize;
-    if (fixedSize) {
-      // Pinned size (DEFAULT's 3-icon row: exactly 122x122, as asked),
-      // regardless of how much room innerW/innerH actually offers.
-      cellSize = fixedSize;
+  function renderGrid(allItems, innerW, innerH, openItem, columns, rows, fixedImgSize) {
+    var imgSize, cellSize; // cellSize = the frame/hit-area size (img + ring)
+    if (fixedImgSize) {
+      // Pinned size (DEFAULT's 3-icon row and LARGE/FULL's 3x2: the visible
+      // circle is exactly 122x122, as asked) regardless of how much room
+      // innerW/innerH actually offers. The frame is bigger than that, by
+      // the ring thickness on each side, so the ring draws OUTSIDE the
+      // 122px circle instead of shrinking it.
+      imgSize = fixedImgSize;
+      cellSize = fixedImgSize + RING_THICKNESS * 2;
     } else {
       // Gap scales with the cell size instead of a fixed 8px, to match the
       // mockup's spacing -- first pass estimates the cell size with a
@@ -409,6 +417,7 @@
       var byWidthG = Math.floor((innerW - gapGuess * (columns - 1)) / columns);
       var byHeightG = Math.floor((innerH - gapGuess * (rows - 1)) / rows);
       cellSize = Math.min(byWidthG, byHeightG);
+      imgSize = Math.max(28, cellSize - RING_THICKNESS * 2);
     }
     var gap = Math.max(6, Math.round(cellSize * 0.16));
     var items = allItems.slice(0, columns * rows);
@@ -424,6 +433,7 @@
             key: item.id || item.titleId || idx,
             item: item,
             size: cellSize,
+            img: imgSize,
             onPress: (function (it) { return function () { openItem(it); }; })(item)
           }));
         }
