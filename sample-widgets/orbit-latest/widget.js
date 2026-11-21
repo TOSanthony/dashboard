@@ -369,10 +369,12 @@
     } else if (!total) {
       body = ce(Label, { style: styles.dim }, 'Aucun jeu dans le catalogue.');
     } else {
-      // DEFAULT: one row of 3. LARGE/FULL: the full 3x3 grid. Same
+      // DEFAULT: one row of 3, circles pinned to a fixed 122x122 (the exact
+      // size asked for, rather than whatever innerW/innerH happens to fit).
+      // LARGE/FULL: the full 3x3 grid, still sized to fit the box. Same
       // renderGrid/GridCell both times -- just a different column/row cap.
       body = compact
-        ? renderGrid(data.items, innerW, innerH, openItem, 3, 1)
+        ? renderGrid(data.items, innerW, innerH, openItem, 3, 1, 122)
         : renderGrid(data.items, innerW, innerH, openItem, 3, 3);
     }
 
@@ -392,23 +394,22 @@
   // Never a different count depending on how many games there are or how
   // tall the tile happens to be -- arrows/L1/R1 already move between cells
   // by screen position, the SDK's own wh.Focusable behaviour.
-  function renderGrid(allItems, innerW, innerH, openItem, columns, rows) {
-    // Gap scales with the cell size instead of a fixed 8px, to match the
-    // mockup's spacing (noticeably tighter at DEFAULT's 3 big circles,
-    // noticeably looser in absolute px at LARGE's 3x3 small ones) -- first
-    // pass estimates the cell size with a nominal gap, then the real gap is
-    // derived from that estimate and the grid is laid out with it.
-    var gapGuess = 8;
-    var byWidthG = Math.floor((innerW - gapGuess * (columns - 1)) / columns);
-    var byHeightG = Math.floor((innerH - gapGuess * (rows - 1)) / rows);
-    var cellSizeGuess = Math.min(byWidthG, byHeightG);
-    var gap = Math.max(6, Math.round(cellSizeGuess * 0.16));
-    // A single, uniform cellSize (Math.min of both dimensions), matching
-    // the confirmed-working build exactly -- GridCell takes one `size`
-    // prop, not separate cellW/cellH.
-    var byWidth = Math.floor((innerW - gap * (columns - 1)) / columns);
-    var byHeight = Math.floor((innerH - gap * (rows - 1)) / rows);
-    var cellSize = Math.min(byWidth, byHeight);
+  function renderGrid(allItems, innerW, innerH, openItem, columns, rows, fixedSize) {
+    var cellSize;
+    if (fixedSize) {
+      // Pinned size (DEFAULT's 3-icon row: exactly 122x122, as asked),
+      // regardless of how much room innerW/innerH actually offers.
+      cellSize = fixedSize;
+    } else {
+      // Gap scales with the cell size instead of a fixed 8px, to match the
+      // mockup's spacing -- first pass estimates the cell size with a
+      // nominal gap, then the real gap is derived from that estimate.
+      var gapGuess = 8;
+      var byWidthG = Math.floor((innerW - gapGuess * (columns - 1)) / columns);
+      var byHeightG = Math.floor((innerH - gapGuess * (rows - 1)) / rows);
+      cellSize = Math.min(byWidthG, byHeightG);
+    }
+    var gap = Math.max(6, Math.round(cellSize * 0.16));
     var items = allItems.slice(0, columns * rows);
     var lines = [];
     for (var r = 0; r < rows; r++) {
