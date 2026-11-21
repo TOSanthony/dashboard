@@ -224,35 +224,28 @@
     // No label under the avatar (dropped per on-console feedback) -- the
     // circle gets the whole cell instead of giving up room to a text line.
     var circle = Math.max(28, Math.min(cellW, cellH) - CIRCLE_RING);
-    var frame = circle + CIRCLE_RING;
-    var marginX = (cellW - frame) / 2, marginY = (cellH - frame) / 2;
-    // Fifth attempt: focusedStyle alone (transparent -> white) still never
-    // showed anything, even though it matches the SDK's own documented
-    // Focusable pattern. The one thing every actually-working example of
-    // that pattern (the SDK reference widget's Chip, this widget's own
-    // pill-shaped chips elsewhere) has in common that our ring didn't: the
-    // *base* style is never fully transparent -- it's a translucent
-    // '#ffffff1f' that's always faintly visible, and focusedStyle brightens
-    // that to solid white. A transparent -> colour swap may simply not
-    // repaint reliably on this engine; a colour -> brighter-colour one is
-    // the only transition actually confirmed. So the ring is now always
-    // faintly visible around every circle, and brightens to solid white on
-    // focus, instead of invisible until (never) focused.
+    // Sixth attempt, this time off an actual prior build of this same
+    // widget confirmed working on console (its square-tile GridCell, before
+    // the circular-avatar refresh): the ring was never driven by
+    // focusedStyle at all -- it was the `selected` function-child argument
+    // toggling a plain conditional style, same as every size/version this
+    // widget has ever shipped before this segment. The other thing that
+    // build did differently: the ring View it returns is the exact same
+    // size as the Focusable's own box (both the full cellW x cellH slot) --
+    // no smaller "frame" centered inside a bigger Focusable box needing its
+    // own layout step. Only the innermost image is smaller than that,
+    // centered by the ring's own alignItems/justifyContent. Matching that
+    // exactly here, just with a circle instead of a square tile.
     return ce(wh.Focusable, {
       onPress: props.onPress,
-      style: {
-        width: frame, height: frame,
-        marginLeft: marginX, marginRight: marginX, marginTop: marginY, marginBottom: marginY,
-        borderRadius: 999, overflow: 'hidden', backgroundColor: '#ffffff1f',
-        alignItems: 'center', justifyContent: 'center'
-      },
-      focusedStyle: { backgroundColor: '#ffffff' }
+      style: { width: cellW, height: cellH, alignItems: 'center', justifyContent: 'center' }
     }, function (selected) {
       if (selected) debugLogSelect('GridCell', item.id || item.titleId || '?');
-      return ce(View, { style: [styles.circleImg, { width: circle, height: circle }] },
-        Image && item.cover
-          ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: circle, height: circle, borderRadius: circle / 2 } })
-          : null);
+      return ce(View, { style: [styles.circleFrame, selected ? styles.circleFrameSelected : null, { width: cellW, height: cellH }] },
+        ce(View, { style: [styles.circleImg, { width: circle, height: circle }] },
+          Image && item.cover
+            ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: circle, height: circle, borderRadius: circle / 2 } })
+            : null));
     });
   }
 
@@ -456,32 +449,24 @@
     var slotW = Math.floor(innerW / Math.max(1, items.length));
     var circle = Math.max(28, Math.min(innerH, slotW - 16) - CIRCLE_RING);
     var frame = circle + CIRCLE_RING;
-    // Same fix as GridCell (see its comment): the ring now rides
-    // wh.Focusable's own style/focusedStyle swap -- the one mechanism
-    // actually proven on console, via Row -- instead of the `selected`
-    // function-child argument, which never produced a visible ring here
-    // even after removing the extra wrapping View. Focusable is the direct
-    // array item (key moved onto it), sized frame x frame with margins so
-    // it still fills the whole slotW slot, matching Row's own box-is-the-
-    // highlight structure exactly.
-    var marginX = (slotW - frame) / 2;
+    // Same fix as GridCell (see its comment): matches the prior, confirmed-
+    // working build of this widget -- the ring rides the `selected`
+    // function-child argument via a plain conditional style, not
+    // focusedStyle, and the ring View it returns is the exact same size as
+    // the Focusable's own box (both frame x frame) rather than a smaller
+    // box centered inside a bigger one.
     var cells = items.map(function (item, i) {
       return ce(wh.Focusable, {
         key: item.id || item.titleId || i,
         onPress: function () { openItem(item); },
-        style: {
-          width: frame, height: frame,
-          marginLeft: marginX, marginRight: marginX,
-          borderRadius: 999, overflow: 'hidden', backgroundColor: '#ffffff1f',
-          alignItems: 'center', justifyContent: 'center'
-        },
-        focusedStyle: { backgroundColor: '#ffffff' }
+        style: { width: frame, height: frame, alignItems: 'center', justifyContent: 'center' }
       }, function (selected) {
         if (selected) debugLogSelect('Trio', item.id || item.titleId || '?');
-        return ce(View, { style: [styles.circleImg, { width: circle, height: circle }] },
-          Image && item.cover
-            ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: circle, height: circle, borderRadius: circle / 2 } })
-            : null);
+        return ce(View, { style: [styles.circleFrame, selected ? styles.circleFrameSelected : null, { width: frame, height: frame }] },
+          ce(View, { style: [styles.circleImg, { width: circle, height: circle }] },
+            Image && item.cover
+              ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: circle, height: circle, borderRadius: circle / 2 } })
+              : null));
       });
     });
     return ce(View, { style: { flexDirection: 'row', justifyContent: 'space-evenly', alignItems: 'center' } }, cells);
