@@ -6,6 +6,18 @@
   "iconFallback": "game",
   "hideKeyGuide": true,
   "size": 1,
-  "heroCover": false
+  "heroCover": false,
+  "settings": [
+    {
+      "id": "shape",
+      "title": "Forme des icones",
+      "type": "choice",
+      "options": [
+        { "value": "round", "label": "Rond" },
+        { "value": "square", "label": "Carre (bords arrondis)" }
+      ],
+      "default": "round"
+    }
+  ]
 }
 

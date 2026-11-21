@@ -114,6 +114,10 @@
   // (frame = img + RING_THICKNESS*2), not space eaten out of the image, so
   // a 122px circle stays 122px whether or not it's selected.
   var RING_THICKNESS = 7;
+  // Fixed corner radius used in "square" shape mode (Options -> Forme des
+  // icones) -- not half the side like round mode, just a normal rounded
+  // corner, same idea for the frame and the image inside it.
+  var SQUARE_RADIUS = 16;
 
   var styles = wh.StyleSheet.create({
     card: { borderRadius: 16, overflow: 'hidden' },
@@ -179,22 +183,26 @@
   });
 
 
-  // A grid cell: confirmed-working `selected`-driven ring/frame mechanism,
-  // round avatars, no title bar. `img` is the always-fixed visible circle
-  // size; `slot` (the frame/Focusable hit area) is img + RING_THICKNESS*2,
-  // so the ring is extra space the frame adds AROUND the image rather than
-  // space eaten out of it -- the image itself never shrinks.
+  // A grid cell: confirmed-working `selected`-driven ring/frame mechanism.
+  // `img` is the always-fixed visible size; `slot` (the frame/Focusable hit
+  // area) is img + RING_THICKNESS*2, so the ring is extra space the frame
+  // adds AROUND the image rather than space eaten out of it. `shape` (from
+  // Options -> Forme des icones) picks round (radius = half the side) or
+  // square-with-rounded-corners (a fixed SQUARE_RADIUS) for both the frame
+  // and the image -- same size, same selector, just the corner rule changes.
   function GridCell(props) {
     var item = props.item, slot = props.size, img = props.img;
+    var frameRadius = props.shape === 'square' ? SQUARE_RADIUS : slot / 2;
+    var imgRadius = props.shape === 'square' ? Math.max(0, SQUARE_RADIUS - RING_THICKNESS) : img / 2;
     return ce(wh.Focusable, {
       onPress: props.onPress,
       style: { width: slot, height: slot, alignItems: 'center', justifyContent: 'center' }
     }, function (selected) {
       if (selected) debugLogSelect('GridCell', item.id || item.titleId || '?');
-      return ce(View, { style: [styles.gridFrame, selected ? styles.gridFrameSelected : null, { width: slot, height: slot, borderRadius: slot / 2 }] },
-        ce(View, { style: [styles.gridImg, { width: img, height: img, borderRadius: img / 2 }] },
+      return ce(View, { style: [styles.gridFrame, selected ? styles.gridFrameSelected : null, { width: slot, height: slot, borderRadius: frameRadius }] },
+        ce(View, { style: [styles.gridImg, { width: img, height: img, borderRadius: imgRadius }] },
           Image && item.cover
-            ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: img, height: img, borderRadius: img / 2 } })
+            ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: img, height: img, borderRadius: imgRadius } })
             : null
         ));
     });
@@ -276,6 +284,10 @@
     var innerW = W - pad;
     var innerH = noHeader ? H - pad : H - pad - titleH - gap;
     var cfg = (props && props.config) || {};
+    // Options (Start) -> "Forme des icones": round (default) or square with
+    // rounded corners. Persisted/merged by the hub itself (see config.json's
+    // settings schema); only GridCell's corner radius changes with it.
+    var shape = ((props && props.settings) || {}).shape || 'round';
 
     var coverState = React.useState(0);
     var coverIndex = coverState[0], setCoverIndex = coverState[1];
@@ -378,8 +390,8 @@
       // happens to fit -- same renderGrid/GridCell, just a different
       // column/row cap.
       body = compact
-        ? renderGrid(data.items, innerW, innerH, openItem, 3, 1, 122)
-        : renderGrid(data.items, innerW, innerH, openItem, 3, 2, 122);
+        ? renderGrid(data.items, innerW, innerH, openItem, 3, 1, 122, shape)
+        : renderGrid(data.items, innerW, innerH, openItem, 3, 2, 122, shape);
     }
 
     var badge = data.loading ? null : (total ? total + ' jeu' + (total === 1 ? '' : 'x') : null);
@@ -399,7 +411,7 @@
   // depending on how many games there are or how tall the tile happens to
   // be -- arrows/L1/R1 already move between cells by screen position, the
   // SDK's own wh.Focusable behaviour.
-  function renderGrid(allItems, innerW, innerH, openItem, columns, rows, fixedImgSize) {
+  function renderGrid(allItems, innerW, innerH, openItem, columns, rows, fixedImgSize, shape) {
     var imgSize, cellSize; // cellSize = the frame/hit-area size (img + ring)
     if (fixedImgSize) {
       // Pinned size (DEFAULT's 3-icon row and LARGE/FULL's 3x2: the visible
@@ -434,6 +446,7 @@
             item: item,
             size: cellSize,
             img: imgSize,
+            shape: shape,
             onPress: (function (it) { return function () { openItem(it); }; })(item)
           }));
         }
