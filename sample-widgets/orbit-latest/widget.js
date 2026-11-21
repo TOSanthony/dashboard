@@ -582,8 +582,22 @@
     // Animated entries in the same transform array), so it can ramp in
     // step with the rotation instead of popping in once the rotation
     // settles.
+    // Merging the rotation onto the same view as the clip (previous fix)
+    // didn't actually survive rotation either -- still square on console,
+    // on both sides, at rest. So it isn't "ancestor vs. same view" that
+    // breaks the clip here, it's the parent-clips-child relationship
+    // itself (overflow:hidden on a View, clipping an Image child) once
+    // any real rotation is in play; the center card (always rot: 0deg)
+    // is the only one that never actually exercises that relationship
+    // under rotation, which is consistent with every variant tried so
+    // far. Next thing to try: stop asking a View to clip a rotated child
+    // at all -- drop this wrapper's own overflow:hidden and let the
+    // Image round its own corners directly (no separate clip layer,
+    // nothing for a rotation to get composited in the wrong order
+    // against). The wrapper keeps its backgroundColor+borderRadius for
+    // the no-image placeholder box, which never needs a child clipped.
     return ce(Animated.View, {
-      style: [styles.coverInset, {
+      style: [styles.coverInset, { overflow: 'visible' }, {
         left: left, top: top, width: size, height: size, opacity: props.op,
         transform: [
           { translateX: dx }, { translateY: dy },
