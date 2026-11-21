@@ -226,25 +226,24 @@
     var circle = Math.max(28, Math.min(cellW, cellH) - CIRCLE_RING);
     var frame = circle + CIRCLE_RING;
     var marginX = (cellW - frame) / 2, marginY = (cellH - frame) / 2;
-    // Fourth attempt at the ring, this time off the mechanism actually
-    // proven on console: Row's highlight works, and Row drives it entirely
-    // through wh.Focusable's own style/focusedStyle swap -- the `selected`
-    // function-child argument it also receives is only ever used there for
-    // debugLogSelect, never for anything visual. GridCell and Trio had been
-    // painting their ring off that same `selected` argument instead, which
-    // never produced a visible ring even after the wrapper fix below --
-    // consistent with `selected` just not being the live signal, same as it
-    // never logged. So this now matches Row exactly: Focusable's own style
-    // IS the ring (transparent circle, frame x frame, margined to still
-    // fill the cellW x cellH slot so the 3x3 math is untouched) and
-    // focusedStyle swaps it to white on focus -- no inline conditional
-    // painting left in the render callback at all.
+    // Fifth attempt: focusedStyle alone (transparent -> white) still never
+    // showed anything, even though it matches the SDK's own documented
+    // Focusable pattern. The one thing every actually-working example of
+    // that pattern (the SDK reference widget's Chip, this widget's own
+    // pill-shaped chips elsewhere) has in common that our ring didn't: the
+    // *base* style is never fully transparent -- it's a translucent
+    // '#ffffff1f' that's always faintly visible, and focusedStyle brightens
+    // that to solid white. A transparent -> colour swap may simply not
+    // repaint reliably on this engine; a colour -> brighter-colour one is
+    // the only transition actually confirmed. So the ring is now always
+    // faintly visible around every circle, and brightens to solid white on
+    // focus, instead of invisible until (never) focused.
     return ce(wh.Focusable, {
       onPress: props.onPress,
       style: {
         width: frame, height: frame,
         marginLeft: marginX, marginRight: marginX, marginTop: marginY, marginBottom: marginY,
-        borderRadius: 999, overflow: 'hidden', backgroundColor: 'transparent',
+        borderRadius: 999, overflow: 'hidden', backgroundColor: '#ffffff1f',
         alignItems: 'center', justifyContent: 'center'
       },
       focusedStyle: { backgroundColor: '#ffffff' }
@@ -473,7 +472,7 @@
         style: {
           width: frame, height: frame,
           marginLeft: marginX, marginRight: marginX,
-          borderRadius: 999, overflow: 'hidden', backgroundColor: 'transparent',
+          borderRadius: 999, overflow: 'hidden', backgroundColor: '#ffffff1f',
           alignItems: 'center', justifyContent: 'center'
         },
         focusedStyle: { backgroundColor: '#ffffff' }
