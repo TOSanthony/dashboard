@@ -74,6 +74,18 @@
   // no new server-side plumbing needed.
   var EMPTY_FRAME_URI = 'http://127.0.0.1:8098/orbit-latest/empty-frame.png';
   var EMPTY_ICON_URI = 'http://127.0.0.1:8098/orbit-latest/empty-icon.png';
+  // Patches the one thing this engine's rotation genuinely can't do: round
+  // a corner. Confirmed (3 different techniques, all square on both
+  // rotated sides, at rest -- only the never-rotated center card ever
+  // comes out rounded) that no runtime clip/borderRadius combination
+  // survives a real rotation here, on a View or on the Image itself. So
+  // this doesn't clip anything at runtime -- it's a tiny pre-rendered
+  // transparent PNG (just the four tiny corner wedges a 10px radius would
+  // normally cut away, pre-painted in the card's own mat/background
+  // color) that rotates glued to the card via the exact same transform,
+  // patching over the sharp corner tips with a convincing rounded-looking
+  // edge instead of actually clipping anything.
+  var FAN_CORNER_FIX_URI = 'http://127.0.0.1:8098/orbit-latest/fan-corner-fix.png';
   // Selection ring around a circular avatar (grid + list trio). Both
   // GridCell and renderCompactTrio used to size the circle to fill its
   // whole cell/slot and only then add this ring on top -- the ring had no
@@ -582,22 +594,27 @@
     // Animated entries in the same transform array), so it can ramp in
     // step with the rotation instead of popping in once the rotation
     // settles.
-    // Merging the rotation onto the same view as the clip (previous fix)
-    // didn't actually survive rotation either -- still square on console,
-    // on both sides, at rest. So it isn't "ancestor vs. same view" that
-    // breaks the clip here, it's the parent-clips-child relationship
-    // itself (overflow:hidden on a View, clipping an Image child) once
-    // any real rotation is in play; the center card (always rot: 0deg)
-    // is the only one that never actually exercises that relationship
-    // under rotation, which is consistent with every variant tried so
-    // far. Next thing to try: stop asking a View to clip a rotated child
-    // at all -- drop this wrapper's own overflow:hidden and let the
-    // Image round its own corners directly (no separate clip layer,
-    // nothing for a rotation to get composited in the wrong order
-    // against). The wrapper keeps its backgroundColor+borderRadius for
-    // the no-image placeholder box, which never needs a child clipped.
+    // Three different techniques all left the rotated cards square on
+    // console (ancestor rotates+child clips; rotation merged onto the
+    // same clipped view; no clip at all, Image's own borderRadius with
+    // no parent clipping it) -- always square on both sides, at rest,
+    // never just the center card (permanently rot: 0deg). So no runtime
+    // clip/borderRadius combination survives an actual rotation on this
+    // engine, full stop; it isn't about which element owns the clip.
+    //
+    // Given that, don't ask the engine to clip a rotated corner at all:
+    // patch it visually instead. FAN_CORNER_FIX_URI is a tiny
+    // pre-rendered transparent PNG holding just the four corner wedges a
+    // 10px radius would normally cut away, pre-painted in the card's own
+    // mat/background color -- rendered as a second child of this same
+    // Animated.View so it picks up the exact same transform as the cover
+    // Image (glued to the card through every rotation, steady or
+    // animated), landing right on top of the real card's sharp corners
+    // and covering them with a convincing rounded-looking edge. Skipped
+    // for the one card that's permanently rot: 0deg (cornerFix prop),
+    // since that corner already renders correctly and doesn't need it.
     return ce(Animated.View, {
-      style: [styles.coverInset, { overflow: 'visible' }, {
+      style: [styles.coverInset, {
         left: left, top: top, width: size, height: size, opacity: props.op,
         transform: [
           { translateX: dx }, { translateY: dy },
@@ -606,9 +623,14 @@
           { translateY: props.extraY || 0 }
         ]
       }]
-    }, Image && item && item.cover
-      ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: size, height: size, borderRadius: 10 } })
-      : null);
+    },
+      Image && item && item.cover
+        ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: size, height: size, borderRadius: 10 } })
+        : null,
+      props.cornerFix && Image
+        ? ce(Image, { source: { uri: FAN_CORNER_FIX_URI }, resizeMode: 'stretch', style: { position: 'absolute', left: 0, top: 0, width: size, height: size } })
+        : null
+    );
   }
 
   // The left (-20deg) card reads slightly high against the dashed frame
@@ -654,8 +676,8 @@
       var nextItem = total > 1 ? allItems[(index + 1) % total] : null;
       var prevItem = total > 1 ? allItems[(index - 1 + total) % total] : null;
       cards = [
-        prevItem ? ce(FanCard, { key: fanKey(prevItem, 'l'), r: r, item: prevItem, rot: -FAN_DEG + 'deg', op: 0.9, extraY: FAN_LEFT_PIVOT_Y_ADJUST }) : null,
-        nextItem ? ce(FanCard, { key: fanKey(nextItem, 'r'), r: r, item: nextItem, rot: FAN_DEG + 'deg', op: 0.9 }) : null,
+        prevItem ? ce(FanCard, { key: fanKey(prevItem, 'l'), r: r, item: prevItem, rot: -FAN_DEG + 'deg', op: 0.9, extraY: FAN_LEFT_PIVOT_Y_ADJUST, cornerFix: true }) : null,
+        nextItem ? ce(FanCard, { key: fanKey(nextItem, 'r'), r: r, item: nextItem, rot: FAN_DEG + 'deg', op: 0.9, cornerFix: true }) : null,
         ce(FanCard, { key: fanKey(curItem, 'c'), r: r, item: curItem, rot: '0deg', op: 1 })
       ];
     } else if (trans.dir === 'next') {
@@ -664,18 +686,20 @@
           key: fanKey(trans.left, 'exit'), r: r, item: trans.left,
           rot: animT.interpolate({ inputRange: [0, 1], outputRange: [-FAN_DEG + 'deg', (-FAN_DEG - 15) + 'deg'] }),
           op: animT.interpolate({ inputRange: [0, 1], outputRange: [0.9, 0] }),
-          extraY: FAN_LEFT_PIVOT_Y_ADJUST
+          extraY: FAN_LEFT_PIVOT_Y_ADJUST, cornerFix: true
         }) : null,
         ce(FanCard, {
           key: fanKey(trans.cur, 'toLeft'), r: r, item: trans.cur,
           rot: animT.interpolate({ inputRange: [0, 1], outputRange: ['0deg', -FAN_DEG + 'deg'] }),
           op: animT.interpolate({ inputRange: [0, 1], outputRange: [1, 0.9] }),
-          extraY: animT.interpolate({ inputRange: [0, 1], outputRange: [0, FAN_LEFT_PIVOT_Y_ADJUST] })
+          extraY: animT.interpolate({ inputRange: [0, 1], outputRange: [0, FAN_LEFT_PIVOT_Y_ADJUST] }),
+          cornerFix: true
         }),
         ce(FanCard, {
           key: fanKey(trans.right, 'toCenter'), r: r, item: trans.right,
           rot: animT.interpolate({ inputRange: [0, 1], outputRange: [FAN_DEG + 'deg', '0deg'] }),
-          op: animT.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] })
+          op: animT.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }),
+          cornerFix: true
         })
       ];
     } else { // 'prev' -- exact mirror of 'next'
@@ -683,18 +707,21 @@
         trans.right ? ce(FanCard, {
           key: fanKey(trans.right, 'exit'), r: r, item: trans.right,
           rot: animT.interpolate({ inputRange: [0, 1], outputRange: [FAN_DEG + 'deg', (FAN_DEG + 15) + 'deg'] }),
-          op: animT.interpolate({ inputRange: [0, 1], outputRange: [0.9, 0] })
+          op: animT.interpolate({ inputRange: [0, 1], outputRange: [0.9, 0] }),
+          cornerFix: true
         }) : null,
         ce(FanCard, {
           key: fanKey(trans.cur, 'toRight'), r: r, item: trans.cur,
           rot: animT.interpolate({ inputRange: [0, 1], outputRange: ['0deg', FAN_DEG + 'deg'] }),
-          op: animT.interpolate({ inputRange: [0, 1], outputRange: [1, 0.9] })
+          op: animT.interpolate({ inputRange: [0, 1], outputRange: [1, 0.9] }),
+          cornerFix: true
         }),
         ce(FanCard, {
           key: fanKey(trans.left, 'toCenter'), r: r, item: trans.left,
           rot: animT.interpolate({ inputRange: [0, 1], outputRange: [-FAN_DEG + 'deg', '0deg'] }),
           op: animT.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }),
-          extraY: animT.interpolate({ inputRange: [0, 1], outputRange: [FAN_LEFT_PIVOT_Y_ADJUST, 0] })
+          extraY: animT.interpolate({ inputRange: [0, 1], outputRange: [FAN_LEFT_PIVOT_Y_ADJUST, 0] }),
+          cornerFix: true
         })
       ];
     }
