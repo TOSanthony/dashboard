@@ -245,7 +245,13 @@
         ce(View, { style: [styles.circleImg, { width: circle, height: circle }] },
           Image && item.cover
             ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: circle, height: circle, borderRadius: circle / 2 } })
-            : null));
+            : null),
+        // TEMP DIAGNOSTIC (remove once settled): a TEXT marker, not a style
+        // swap -- X already launches the right game when the stick moves
+        // first, so the native side tracks focus correctly; this checks
+        // whether that ever reaches back into this render callback's own
+        // `selected` argument at all, independent of any paint/style doubt.
+        selected ? ce(Label, { style: { position: 'absolute', top: 2, right: 2, color: '#ff3b30', fontSize: F.Size4XSmall } }, '★') : null);
     });
   }
 
@@ -466,7 +472,9 @@
           ce(View, { style: [styles.circleImg, { width: circle, height: circle }] },
             Image && item.cover
               ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: circle, height: circle, borderRadius: circle / 2 } })
-              : null));
+              : null),
+          // TEMP DIAGNOSTIC (see GridCell's comment): text marker, not style.
+          selected ? ce(Label, { style: { position: 'absolute', top: 2, right: 2, color: '#ff3b30', fontSize: F.Size4XSmall } }, '★') : null);
       });
     });
     return ce(View, { style: { flexDirection: 'row', justifyContent: 'space-evenly', alignItems: 'center' } }, cells);
