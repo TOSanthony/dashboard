@@ -174,13 +174,11 @@
   });
 
 
-  // A grid cell: square jaquette tile with the title on an overlaid dark
-  // strip, ported verbatim from the prior build of this widget whose grid
-  // selector is confirmed working on console -- a single `size` prop, the
-  // image only 6px smaller than the whole slot, and the ring driven by the
-  // `selected` function-child argument on a plain conditional style (no
-  // focusedStyle). Replaces the circular-avatar shape, whose ring never
-  // showed up no matter how closely it copied this same idiom.
+  // A grid cell: TEST -- same `selected`-driven ring/frame mechanism exactly
+  // as the confirmed-working build, title bar dropped and the frame/image
+  // made round (borderRadius = half the side) instead of the square 8/6px
+  // corners, to see whether the ring still shows up once the shape alone
+  // changes back to round. onPress/Focusable/the ring logic are untouched.
   function GridCell(props) {
     var item = props.item, slot = props.size;
     var img = Math.max(28, slot - 6);
@@ -189,13 +187,11 @@
       style: { width: slot, height: slot, alignItems: 'center', justifyContent: 'center' }
     }, function (selected) {
       if (selected) debugLogSelect('GridCell', item.id || item.titleId || '?');
-      return ce(View, { style: [styles.gridFrame, selected ? styles.gridFrameSelected : null, { width: slot, height: slot }] },
-        ce(View, { style: [styles.gridImg, { width: img, height: img }] },
+      return ce(View, { style: [styles.gridFrame, selected ? styles.gridFrameSelected : null, { width: slot, height: slot, borderRadius: slot / 2 }] },
+        ce(View, { style: [styles.gridImg, { width: img, height: img, borderRadius: img / 2 }] },
           Image && item.cover
-            ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: img, height: img } })
-            : null,
-          ce(View, { style: styles.gridLabelBar },
-            ce(Label, { style: styles.small, numberOfLines: 1 }, String(item.title || item.titleId || '?')))
+            ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: img, height: img, borderRadius: img / 2 } })
+            : null
         ));
     });
   }
