@@ -225,32 +225,30 @@
     // circle gets the whole cell instead of giving up room to a text line.
     var circle = Math.max(28, Math.min(cellW, cellH) - CIRCLE_RING);
     var frame = circle + CIRCLE_RING;
-    // Second attempt at the ring: the previous one drove it entirely off
-    // wh.Focusable's own style/focusedStyle swap (the frame-sized box was
-    // the Focusable's own outer style, swapped to a white background on
-    // focus) -- still invisible on console even after the sizing fix, which
-    // points at Focusable not reliably honouring an explicit width/height
-    // on its own outer box when the child doesn't need that much room (it
-    // likely shrinks to fit its content, collapsing the frame down to the
-    // circle's own size -- leaving no margin for a ring to occupy, not just
-    // an invisible-but-present one). So this no longer trusts that box at
-    // all for anything visual: the ring is now a plain View explicitly
-    // sized frame x frame, inside the render callback's own returned tree,
-    // painted purely off the `selected` argument -- the one part of this
-    // mechanism already confirmed reliable (it's what drives debugLogSelect
-    // below). Focusable's own style is now just a same-size hit-target hint.
-    return ce(View, { style: { width: cellW, height: cellH, alignItems: 'center', justifyContent: 'center' } },
-      ce(wh.Focusable, {
-        onPress: props.onPress,
-        style: { width: frame, height: frame, alignItems: 'center', justifyContent: 'center' }
-      }, function (selected) {
-        if (selected) debugLogSelect('GridCell', item.id || item.titleId || '?');
-        return ce(View, { style: [styles.circleFrame, { width: frame, height: frame }, selected ? styles.circleFrameSelected : null] },
-          ce(View, { style: [styles.circleImg, { width: circle, height: circle }] },
-            Image && item.cover
-              ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: circle, height: circle, borderRadius: circle / 2 } })
-              : null));
-      })
+    // Third attempt at the ring, and the real fix: debugLogSelect never
+    // fired even once on console (checked the log -- not a single "GridCell
+    // selected" line, not even on entering the widget), so selection itself
+    // was never reaching these cells, whatever the ring's own style did.
+    // The structural difference from Row (whose focus highlight IS
+    // confirmed working): Row's wh.Focusable is the direct child the list
+    // container renders -- nothing wraps it. GridCell was wrapping its
+    // Focusable in an extra centering View, one host-view layer the grid's
+    // row array never saw directly. Removed that wrapper: the Focusable
+    // itself is now the whole cellW x cellH slot (so the 3x3 layout is
+    // unaffected) and centers its own child via alignItems/justifyContent,
+    // exactly like Row centers its own row content -- no extra view between
+    // it and the grid row that hands it out.
+    return ce(wh.Focusable, {
+      onPress: props.onPress,
+      style: { width: cellW, height: cellH, alignItems: 'center', justifyContent: 'center' }
+    }, function (selected) {
+      if (selected) debugLogSelect('GridCell', item.id || item.titleId || '?');
+      return ce(View, { style: [styles.circleFrame, { width: frame, height: frame }, selected ? styles.circleFrameSelected : null] },
+        ce(View, { style: [styles.circleImg, { width: circle, height: circle }] },
+          Image && item.cover
+            ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: circle, height: circle, borderRadius: circle / 2 } })
+            : null));
+    }
     );
   }
 
@@ -454,28 +452,26 @@
     var slotW = Math.floor(innerW / Math.max(1, items.length));
     var circle = Math.max(28, Math.min(innerH, slotW - 16) - CIRCLE_RING);
     var frame = circle + CIRCLE_RING;
-    // Same fix as GridCell (see its comment): the ring is a plain View
-    // explicitly sized frame x frame inside the render callback's own
-    // returned tree, painted off the `selected` argument directly, rather
-    // than trusting wh.Focusable's own style/focusedStyle swap to hold a
-    // frame-sized box with room for a margin around the smaller circle.
+    // Same fix as GridCell (see its comment): debugLogSelect never fired
+    // even once on console, so the extra centering View wrapped around each
+    // Focusable here -- unlike Row, which IS the direct child its list
+    // container renders -- was most likely hiding every slot from the Hub's
+    // focus navigation, not just the ring's own style. The Focusable is now
+    // the direct array item (key moved onto it) and is itself the whole
+    // slotW-wide slot, centering its own child the same way Row does.
     var cells = items.map(function (item, i) {
-      return ce(View, {
+      return ce(wh.Focusable, {
         key: item.id || item.titleId || i,
+        onPress: function () { openItem(item); },
         style: { width: slotW, alignItems: 'center', justifyContent: 'center' }
-      },
-        ce(wh.Focusable, {
-          onPress: function () { openItem(item); },
-          style: { width: frame, height: frame, alignItems: 'center', justifyContent: 'center' }
-        }, function (selected) {
-          if (selected) debugLogSelect('Trio', item.id || item.titleId || '?');
-          return ce(View, { style: [styles.circleFrame, { width: frame, height: frame }, selected ? styles.circleFrameSelected : null] },
-            ce(View, { style: [styles.circleImg, { width: circle, height: circle }] },
-              Image && item.cover
-                ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: circle, height: circle, borderRadius: circle / 2 } })
-                : null));
-        })
-      );
+      }, function (selected) {
+        if (selected) debugLogSelect('Trio', item.id || item.titleId || '?');
+        return ce(View, { style: [styles.circleFrame, { width: frame, height: frame }, selected ? styles.circleFrameSelected : null] },
+          ce(View, { style: [styles.circleImg, { width: circle, height: circle }] },
+            Image && item.cover
+              ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: circle, height: circle, borderRadius: circle / 2 } })
+              : null));
+      });
     });
     return ce(View, { style: { flexDirection: 'row', justifyContent: 'space-evenly', alignItems: 'center' } }, cells);
   }
