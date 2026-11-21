@@ -119,20 +119,18 @@
     body18: { fontSize: F.Size3XSmall },  // 18
     gridRow: { flexDirection: 'row' },
     gridSlot: { alignItems: 'center', justifyContent: 'center' },
-    // Circular avatar, shared by the grid and by the DEFAULT-size list's
-    // row of 3 (the Nov 2026 refresh moved both off square tiles). The ring
-    // is a slightly larger circle sat behind the avatar, not a border: a
-    // border drawn via borderWidth/borderColor on this frame turned out not
-    // to render in this runtime (it never showed up, regardless of paint
-    // order or the gap left for it). backgroundColor is confirmed working
-    // everywhere else in this widget (rowFocused, the mat, etc.), so the
-    // "ring" here is really a solid white fill peeking out from behind the
-    // smaller, centered image -- same visual result, through a style
-    // property that's actually supported. White ring on selection, per the
-    // approved design (earlier versions used the accent color here).
-    circleFrame: { borderRadius: 999, backgroundColor: 'transparent', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-    circleFrameSelected: { backgroundColor: '#ffffff' },
-    circleImg: { borderRadius: 999, backgroundColor: '#263a58', overflow: 'hidden' },
+    // Square jaquette tile with the title on an overlaid dark strip, shared
+    // by every grid size (DEFAULT's row of 3 and LARGE/FULL's 3x3) -- back
+    // to this shape and its selector exactly as confirmed working on
+    // console (the circular-avatar version never showed its ring, no
+    // matter how closely it copied this same idiom). The image is only 6px
+    // smaller than the whole slot, and the ring is a plain backgroundColor
+    // swap on the frame behind it, driven by the `selected` function-child
+    // argument directly -- not focusedStyle, which never worked here either.
+    gridFrame: { borderRadius: 8, backgroundColor: 'transparent', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+    gridFrameSelected: { backgroundColor: '#ffffff' },
+    gridImg: { borderRadius: 6, backgroundColor: '#263a58', overflow: 'hidden' },
+    gridLabelBar: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: '#000000a0', paddingHorizontal: 6, paddingVertical: 3 },
     // Cover mode: the image fills the whole card edge to edge (no gap from
     // the card's own padding), title/dots overlaid on a bottom strip.
     // Same clipping note as `cover` above: don't rely on the card's own
@@ -176,12 +174,13 @@
   });
 
 
-  // A grid cell: circular avatar. Ported verbatim (just squared circle
-  // instead of square tile) from the prior build of this widget whose grid
-  // selector is confirmed working on console -- a single `size` prop (not
-  // a separate cellW/cellH), and the image only 6px smaller than the whole
-  // slot (not CIRCLE_RING/16px), matching that build exactly rather than
-  // our own, still-invisible adaptation of the same idiom.
+  // A grid cell: square jaquette tile with the title on an overlaid dark
+  // strip, ported verbatim from the prior build of this widget whose grid
+  // selector is confirmed working on console -- a single `size` prop, the
+  // image only 6px smaller than the whole slot, and the ring driven by the
+  // `selected` function-child argument on a plain conditional style (no
+  // focusedStyle). Replaces the circular-avatar shape, whose ring never
+  // showed up no matter how closely it copied this same idiom.
   function GridCell(props) {
     var item = props.item, slot = props.size;
     var img = Math.max(28, slot - 6);
@@ -190,11 +189,14 @@
       style: { width: slot, height: slot, alignItems: 'center', justifyContent: 'center' }
     }, function (selected) {
       if (selected) debugLogSelect('GridCell', item.id || item.titleId || '?');
-      return ce(View, { style: [styles.circleFrame, selected ? styles.circleFrameSelected : null, { width: slot, height: slot }] },
-        ce(View, { style: [styles.circleImg, { width: img, height: img, borderRadius: img / 2 }] },
+      return ce(View, { style: [styles.gridFrame, selected ? styles.gridFrameSelected : null, { width: slot, height: slot }] },
+        ce(View, { style: [styles.gridImg, { width: img, height: img }] },
           Image && item.cover
-            ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: img, height: img, borderRadius: img / 2 } })
-            : null));
+            ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: img, height: img } })
+            : null,
+          ce(View, { style: styles.gridLabelBar },
+            ce(Label, { style: styles.small, numberOfLines: 1 }, String(item.title || item.titleId || '?')))
+        ));
     });
   }
 
