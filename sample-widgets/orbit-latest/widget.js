@@ -177,11 +177,10 @@
   // A grid cell: confirmed-working `selected`-driven ring/frame mechanism,
   // round avatars, no title bar. The ring is the white gridFrame showing
   // through the gap between the frame's edge and the image inside it, so
-  // its thickness is just that gap -- widened here (was 3px/side) to match
-  // the mockup's noticeably thicker ring.
+  // its thickness is just that gap -- pinned to the asked-for 16px/side.
   function GridCell(props) {
     var item = props.item, slot = props.size;
-    var img = Math.max(28, slot - 14);
+    var img = Math.max(28, slot - 32);
     return ce(wh.Focusable, {
       onPress: props.onPress,
       style: { width: slot, height: slot, alignItems: 'center', justifyContent: 'center' }
