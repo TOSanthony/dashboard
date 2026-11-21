@@ -225,25 +225,31 @@
     // circle gets the whole cell instead of giving up room to a text line.
     var circle = Math.max(28, Math.min(cellW, cellH) - CIRCLE_RING);
     var frame = circle + CIRCLE_RING;
-    // The ring was invisible on console because it relied on the render
-    // callback's `selected` argument to toggle a style -- but Row (whose
-    // focus highlight IS visible) never uses that argument for its own
-    // look; it only uses it for the debug log, and gets its actual visual
-    // feedback from wh.Focusable's own `focusedStyle` prop instead. Ring
-    // now goes through that same, confirmed-working mechanism: the
-    // Focusable's own box IS the ring frame, and focusedStyle swaps its
-    // background to white on focus.
+    // Second attempt at the ring: the previous one drove it entirely off
+    // wh.Focusable's own style/focusedStyle swap (the frame-sized box was
+    // the Focusable's own outer style, swapped to a white background on
+    // focus) -- still invisible on console even after the sizing fix, which
+    // points at Focusable not reliably honouring an explicit width/height
+    // on its own outer box when the child doesn't need that much room (it
+    // likely shrinks to fit its content, collapsing the frame down to the
+    // circle's own size -- leaving no margin for a ring to occupy, not just
+    // an invisible-but-present one). So this no longer trusts that box at
+    // all for anything visual: the ring is now a plain View explicitly
+    // sized frame x frame, inside the render callback's own returned tree,
+    // painted purely off the `selected` argument -- the one part of this
+    // mechanism already confirmed reliable (it's what drives debugLogSelect
+    // below). Focusable's own style is now just a same-size hit-target hint.
     return ce(View, { style: { width: cellW, height: cellH, alignItems: 'center', justifyContent: 'center' } },
       ce(wh.Focusable, {
         onPress: props.onPress,
-        style: [styles.circleFrame, { width: frame, height: frame }],
-        focusedStyle: styles.circleFrameSelected
+        style: { width: frame, height: frame, alignItems: 'center', justifyContent: 'center' }
       }, function (selected) {
         if (selected) debugLogSelect('GridCell', item.id || item.titleId || '?');
-        return ce(View, { style: [styles.circleImg, { width: circle, height: circle }] },
-          Image && item.cover
-            ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: circle, height: circle, borderRadius: circle / 2 } })
-            : null);
+        return ce(View, { style: [styles.circleFrame, { width: frame, height: frame }, selected ? styles.circleFrameSelected : null] },
+          ce(View, { style: [styles.circleImg, { width: circle, height: circle }] },
+            Image && item.cover
+              ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: circle, height: circle, borderRadius: circle / 2 } })
+              : null));
       })
     );
   }
@@ -448,10 +454,11 @@
     var slotW = Math.floor(innerW / Math.max(1, items.length));
     var circle = Math.max(28, Math.min(innerH, slotW - 16) - CIRCLE_RING);
     var frame = circle + CIRCLE_RING;
-    // Same fix as GridCell: the ring now goes through wh.Focusable's own
-    // focusedStyle (confirmed working, via Row) instead of the render
-    // callback's `selected` argument, which Row itself never relies on for
-    // its own visual feedback either.
+    // Same fix as GridCell (see its comment): the ring is a plain View
+    // explicitly sized frame x frame inside the render callback's own
+    // returned tree, painted off the `selected` argument directly, rather
+    // than trusting wh.Focusable's own style/focusedStyle swap to hold a
+    // frame-sized box with room for a margin around the smaller circle.
     var cells = items.map(function (item, i) {
       return ce(View, {
         key: item.id || item.titleId || i,
@@ -459,14 +466,14 @@
       },
         ce(wh.Focusable, {
           onPress: function () { openItem(item); },
-          style: [styles.circleFrame, { width: frame, height: frame }],
-          focusedStyle: styles.circleFrameSelected
+          style: { width: frame, height: frame, alignItems: 'center', justifyContent: 'center' }
         }, function (selected) {
           if (selected) debugLogSelect('Trio', item.id || item.titleId || '?');
-          return ce(View, { style: [styles.circleImg, { width: circle, height: circle }] },
-            Image && item.cover
-              ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: circle, height: circle, borderRadius: circle / 2 } })
-              : null);
+          return ce(View, { style: [styles.circleFrame, { width: frame, height: frame }, selected ? styles.circleFrameSelected : null] },
+            ce(View, { style: [styles.circleImg, { width: circle, height: circle }] },
+              Image && item.cover
+                ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: circle, height: circle, borderRadius: circle / 2 } })
+                : null));
         })
       );
     });
