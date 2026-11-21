@@ -315,7 +315,7 @@
     // standard 16px so the circles get noticeably bigger -- closer to the
     // size of the PS5's own stock "controllers" widget's circles.
     var noHeader = mode === 'list' || mode === 'grid';
-    var pad = noHeader ? 16 : 32, titleH = 40, gap = 8;
+    var pad = noHeader ? 8 : 16, titleH = 40, gap = 8;
     var innerW = W - pad;
     var innerH = noHeader ? H - pad : H - pad - titleH - gap;
     var cfg = (props && props.config) || {};
@@ -377,9 +377,6 @@
       if (mode !== 'cover' || !total) return false;
       openItem(data.items[coverIndex]);
     });
-
-    var pad = 32, titleH = 40, gap = 8;
-    var innerW = W - pad, innerH = H - pad - titleH - gap;
 
     // Cover mode fills the whole tile edge to edge (no card padding, no
     // separate header row) in every state, not just once a cover is ready --
