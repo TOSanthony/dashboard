@@ -67,14 +67,15 @@
   // Nov 2026 visual refresh (design approved on a Claude Artifacts canvas
   // mockup, ported here): circular avatars everywhere (list-at-DEFAULT,
   // grid), a rounded-corner cover inset in jaquette mode, and a real empty
-  // state for jaquette mode while the catalog hasn't loaded yet. This
-  // placeholder image is a plain widget asset served the same way
+  // state for jaquette mode while the catalog hasn't loaded yet. The two
+  // placeholder images are plain widget assets served the same way
   // __app_icon already serves cover art, just off this widget's own folder
   // via the generic /<widget>/<file> route in server.c's wh_asset_conn --
-  // no new server-side plumbing needed. (empty-frame.png, the dashed-line
-  // guide used only to measure/place the jaquette inset while building
-  // this layout, is no longer drawn -- it did its job positioning things
-  // and isn't part of the real UI.)
+  // no new server-side plumbing needed. empty-frame.png is only ever drawn
+  // for the "Orbit Store isn't running" state (the catalog fetch itself
+  // failing) -- loading and a genuinely empty catalog don't use it, see
+  // the cover-mode branch in OrbitLatest below.
+  var EMPTY_FRAME_URI = 'http://127.0.0.1:8098/orbit-latest/empty-frame.png';
   var EMPTY_ICON_URI = 'http://127.0.0.1:8098/orbit-latest/empty-icon.png';
   // Patches the one thing this engine's rotation genuinely can't do: round
   // a corner. Confirmed (3 different techniques, all square on both
@@ -157,6 +158,9 @@
     // cover Image, so the corners match the tile's 16px radius reliably.
     coverFill: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 16, overflow: 'hidden' },
     coverInset: { position: 'absolute', overflow: 'hidden', borderRadius: 10, backgroundColor: '#263a58' },
+    // The dashed-frame placeholder art, full-bleed, for the "Orbit Store
+    // isn't running" empty state only (see renderCoverEmpty).
+    coverFrameBg: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
     // The empty-state icon (same glyph as inside the dashed frame, without
     // its own border) centered in the same slot while the catalog hasn't
     // loaded yet, plus a status line where the title/dots normally sit.
@@ -372,13 +376,25 @@
     // centered icon + status line) instead of falling through to the plain
     // list-style loading/error text below.
     if (mode === 'cover') {
+      // The dashed-frame + centered icon (data.error -- the catalog fetch
+      // itself failed, meaning Orbit Store's own backend isn't up) is the
+      // real "nothing to show" state: no jaquette exists to display at
+      // all. Loading and a genuinely empty catalog aren't that -- Orbit
+      // IS running, there's just nothing (yet) -- so they get a plain
+      // status line only, same as the list/grid modes' own fallback,
+      // instead of the frame/icon treatment meant for "not launched".
+      if (data.error) {
+        return ce(View, { style: [styles.card, { width: W, height: H }] },
+          renderCoverEmpty(W, H, cfg, 'Erreur: ' + data.error));
+      }
       var statusLabel = data.loading ? 'Chargement du catalogue...'
-        : data.error ? 'Erreur: ' + data.error
         : !total ? 'Aucun jeu dans le catalogue.'
         : null;
       return ce(View, { style: [styles.card, { width: W, height: H }] },
         statusLabel
-          ? renderCoverEmpty(W, H, cfg, statusLabel)
+          ? ce(View, { style: styles.coverFill },
+              ce(View, { style: styles.coverHeader }, ce(wh.Title, { iconId: cfg.iconId || 'game' }, cfg.title || 'Orbit Store')),
+              ce(Label, { style: [styles.coverEmptyStatus, styles.small, styles.dim], numberOfLines: 2 }, statusLabel))
           : renderCoverStack(data.items, coverIndex, W, H, cfg, animT, transRef.current));
     }
 
@@ -739,6 +755,7 @@
   function renderCoverEmpty(W, H, cfg, statusLabel) {
     var r = coverInsetRect(W, H);
     return ce(View, { style: styles.coverFill },
+      Image ? ce(Image, { source: { uri: EMPTY_FRAME_URI }, resizeMode: 'cover', style: [styles.coverFrameBg, { width: W, height: H }] }) : null,
       Image ? ce(Image, { source: { uri: EMPTY_ICON_URI }, resizeMode: 'contain', style: [styles.coverEmptyIcon, { left: r.left, top: r.top, width: r.size, height: r.size }] }) : null,
       ce(View, { style: styles.coverHeader },
         ce(wh.Title, { iconId: cfg.iconId || 'game' }, cfg.title || 'Orbit Store')
