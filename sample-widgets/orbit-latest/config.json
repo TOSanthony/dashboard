@@ -5,6 +5,7 @@
   "glyph": "orbit.png",
   "iconFallback": "game",
   "hideKeyGuide": true,
-  "size": 1
+  "size": 1,
+  "heroCover": true
 }
 

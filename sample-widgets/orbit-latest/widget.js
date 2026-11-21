@@ -180,7 +180,16 @@
     // Same 16px on every side as the other widgets' own padded body (e.g.
     // horloge's styles.body), so the icon+title sits at the exact same
     // spot and size as every other stock widget's header.
-    coverHeader: { position: 'absolute', left: 0, right: 0, top: 0, padding: 16 }
+    coverHeader: { position: 'absolute', left: 0, right: 0, top: 0, padding: 16 },
+    // "Vitrine" cover layout (cfg.heroCover): a promo-banner-style display,
+    // one featured game at a time -- title/hint text on the left over the
+    // widget's own mat background, full-height cover art on the right.
+    // Unlike the fan stack, nothing here is ever rotated, so a plain
+    // overflow:hidden + borderRadius clips the art correctly with no
+    // corner-fix patch needed.
+    heroBody: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, flexDirection: 'row', alignItems: 'center', padding: 28 },
+    heroLeft: { flex: 1, justifyContent: 'center', paddingRight: 16 },
+    heroCoverFrame: { borderRadius: 16, overflow: 'hidden', backgroundColor: '#263a58' }
   });
 
   // A per-game catalog row: X (or press) launches Orbit Store. wh.Focusable
@@ -356,10 +365,12 @@
     // the hub's normal resize/selection/entering behaviour alone.
     wh.onPressed(B.L1, function () {
       if (mode !== 'cover' || total < 2) return false;
+      if (cfg.heroCover) { setCoverIndex(function (i) { return (i - 1 + total) % total; }); return; }
       startCoverTransition('prev');
     });
     wh.onPressed(B.R1, function () {
       if (mode !== 'cover' || total < 2) return false;
+      if (cfg.heroCover) { setCoverIndex(function (i) { return (i + 1) % total; }); return; }
       startCoverTransition('next');
     });
     wh.onPressed(B.Cross, function () {
@@ -395,7 +406,9 @@
           ? ce(View, { style: styles.coverFill },
               ce(View, { style: styles.coverHeader }, ce(wh.Title, { iconId: cfg.iconId || 'game' }, cfg.title || 'Orbit Store')),
               ce(Label, { style: [styles.coverEmptyStatus, styles.small, styles.dim], numberOfLines: 2 }, statusLabel))
-          : renderCoverStack(data.items, coverIndex, W, H, cfg, animT, transRef.current));
+          : cfg.heroCover
+            ? renderCoverHero(data.items, coverIndex, W, H, cfg)
+            : renderCoverStack(data.items, coverIndex, W, H, cfg, animT, transRef.current));
     }
 
     var body;
@@ -747,6 +760,43 @@
         ? ce(View, { style: styles.coverOverlay }, ce(CoverProgress, { index: index, total: total }))
         : null
     );
+  }
+
+  // "Vitrine" cover layout (cfg.heroCover, first try -- see widget.js header
+  // comment thread): inspired by the stock PS5 home screen's own full-width
+  // promo banner for a featured game (title/blurb/buttons on the left, a big
+  // piece of cover art on the right). That banner is a totally different,
+  // editorial-only system component we can't reach from a widget -- this is
+  // just our own layout built from the same View/Label/Image/wh.Title
+  // building blocks every other mode here already uses, styled to evoke it.
+  // L1/R1 just step the index directly (no fan to animate); Cross still
+  // opens the game via the existing onPressed(B.Cross) handler above.
+  function renderCoverHero(allItems, index, W, H, cfg) {
+    var total = allItems.length;
+    var item = allItems[index] || {};
+    var pad = 28;
+    var imgH = H - pad * 2;
+    var imgW = Math.round(W * 0.4);
+    return ce(View, { style: [styles.card, { width: W, height: H }] },
+      ce(View, { lightMat: 'auto', style: styles.mat }),
+      ce(View, { style: styles.heroBody },
+        ce(View, { style: styles.heroLeft },
+          ce(wh.Title, { iconId: cfg.iconId || 'game' }, cfg.title || 'Orbit Store'),
+          ce(View, { style: { height: 16 } }),
+          ce(Label, { style: styles.body18, numberOfLines: 2 }, String(item.title || item.titleId || '?')),
+          ce(View, { style: { height: 6 } }),
+          ce(Label, { style: [styles.small, styles.dim], numberOfLines: 1 },
+            total > 1 ? ('Jeu ' + (index + 1) + ' / ' + total) : 'Dernier ajout'),
+          ce(View, { style: { height: 12 } }),
+          total > 1
+            ? ce(Label, { style: [styles.small, styles.dim] }, 'Croix : jouer -- L1/R1 : changer de jeu')
+            : ce(Label, { style: [styles.small, styles.dim] }, 'Croix : jouer')
+        ),
+        ce(View, { style: [styles.heroCoverFrame, { width: imgW, height: imgH }] },
+          Image && item.cover
+            ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: imgW, height: imgH } })
+            : null)
+      ));
   }
 
   // Cover mode, nothing to show yet (loading, errored, or an empty catalog):
