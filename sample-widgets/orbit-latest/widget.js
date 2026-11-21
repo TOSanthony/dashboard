@@ -67,12 +67,14 @@
   // Nov 2026 visual refresh (design approved on a Claude Artifacts canvas
   // mockup, ported here): circular avatars everywhere (list-at-DEFAULT,
   // grid), a rounded-corner cover inset in jaquette mode, and a real empty
-  // state for jaquette mode while the catalog hasn't loaded yet. The two
-  // placeholder images are plain widget assets served the same way
+  // state for jaquette mode while the catalog hasn't loaded yet. This
+  // placeholder image is a plain widget asset served the same way
   // __app_icon already serves cover art, just off this widget's own folder
   // via the generic /<widget>/<file> route in server.c's wh_asset_conn --
-  // no new server-side plumbing needed.
-  var EMPTY_FRAME_URI = 'http://127.0.0.1:8098/orbit-latest/empty-frame.png';
+  // no new server-side plumbing needed. (empty-frame.png, the dashed-line
+  // guide used only to measure/place the jaquette inset while building
+  // this layout, is no longer drawn -- it did its job positioning things
+  // and isn't part of the real UI.)
   var EMPTY_ICON_URI = 'http://127.0.0.1:8098/orbit-latest/empty-icon.png';
   // Patches the one thing this engine's rotation genuinely can't do: round
   // a corner. Confirmed (3 different techniques, all square on both
@@ -154,14 +156,6 @@
     // -- clip right here, at the View that directly wraps the full-bleed
     // cover Image, so the corners match the tile's 16px radius reliably.
     coverFill: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 16, overflow: 'hidden' },
-    // Nov 2026 refresh: the dashed-frame placeholder art (same visual Sony
-    // uses for an empty cover slot) sits full-bleed behind the tile, and the
-    // actual jaquette is inset to land exactly inside its dashed square,
-    // rounded 10px -- matches the approved canvas mockup. The frame image is
-    // sized proportionally to whatever W/H the hub actually hands us rather
-    // than hardcoded, since FULL-size tiles aren't guaranteed to be the
-    // exact 504x504 square the reference asset was measured against.
-    coverFrameBg: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
     coverInset: { position: 'absolute', overflow: 'hidden', borderRadius: 10, backgroundColor: '#263a58' },
     // The empty-state icon (same glyph as inside the dashed frame, without
     // its own border) centered in the same slot while the catalog hasn't
@@ -727,7 +721,6 @@
     }
     return ce(View, { style: styles.coverFill },
       cards,
-      Image ? ce(Image, { source: { uri: EMPTY_FRAME_URI }, resizeMode: 'cover', style: [styles.coverFrameBg, { width: W, height: H }] }) : null,
       // Widget's own logo/title, top-left, same stock wh.Title the list/grid
       // header uses -- cover mode is otherwise the only layout with no
       // "Orbit Store" branding at all.
@@ -741,13 +734,11 @@
   }
 
   // Cover mode, nothing to show yet (loading, errored, or an empty catalog):
-  // same dashed-frame background, but the bare "no image" glyph centered in
-  // the same slot a real jaquette would occupy, and the status line where
-  // the title/dots normally sit.
+  // the bare "no image" glyph centered in the same slot a real jaquette
+  // would occupy, and the status line where the title/dots normally sit.
   function renderCoverEmpty(W, H, cfg, statusLabel) {
     var r = coverInsetRect(W, H);
     return ce(View, { style: styles.coverFill },
-      Image ? ce(Image, { source: { uri: EMPTY_FRAME_URI }, resizeMode: 'cover', style: [styles.coverFrameBg, { width: W, height: H }] }) : null,
       Image ? ce(Image, { source: { uri: EMPTY_ICON_URI }, resizeMode: 'contain', style: [styles.coverEmptyIcon, { left: r.left, top: r.top, width: r.size, height: r.size }] }) : null,
       ce(View, { style: styles.coverHeader },
         ce(wh.Title, { iconId: cfg.iconId || 'game' }, cfg.title || 'Orbit Store')
