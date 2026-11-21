@@ -215,43 +215,25 @@
     });
   }
 
-  // A grid cell: circular avatar with the title centered below it (Nov 2026
-  // refresh -- was a square tile with the title overlaid on a dark strip).
-  // cellW/cellH is the whole slot the 3x3 layout gave this cell; the circle
-  // is sized to fit inside it once a one-line label is reserved below.
+  // A grid cell: circular avatar. Ported verbatim (just squared circle
+  // instead of square tile) from the prior build of this widget whose grid
+  // selector is confirmed working on console -- a single `size` prop (not
+  // a separate cellW/cellH), and the image only 6px smaller than the whole
+  // slot (not CIRCLE_RING/16px), matching that build exactly rather than
+  // our own, still-invisible adaptation of the same idiom.
   function GridCell(props) {
-    var item = props.item, cellW = props.cellW, cellH = props.cellH;
-    // No label under the avatar (dropped per on-console feedback) -- the
-    // circle gets the whole cell instead of giving up room to a text line.
-    var circle = Math.max(28, Math.min(cellW, cellH) - CIRCLE_RING);
-    // Sixth attempt, this time off an actual prior build of this same
-    // widget confirmed working on console (its square-tile GridCell, before
-    // the circular-avatar refresh): the ring was never driven by
-    // focusedStyle at all -- it was the `selected` function-child argument
-    // toggling a plain conditional style, same as every size/version this
-    // widget has ever shipped before this segment. The other thing that
-    // build did differently: the ring View it returns is the exact same
-    // size as the Focusable's own box (both the full cellW x cellH slot) --
-    // no smaller "frame" centered inside a bigger Focusable box needing its
-    // own layout step. Only the innermost image is smaller than that,
-    // centered by the ring's own alignItems/justifyContent. Matching that
-    // exactly here, just with a circle instead of a square tile.
+    var item = props.item, slot = props.size;
+    var img = Math.max(28, slot - 6);
     return ce(wh.Focusable, {
       onPress: props.onPress,
-      style: { width: cellW, height: cellH, alignItems: 'center', justifyContent: 'center' }
+      style: { width: slot, height: slot, alignItems: 'center', justifyContent: 'center' }
     }, function (selected) {
       if (selected) debugLogSelect('GridCell', item.id || item.titleId || '?');
-      return ce(View, { style: [styles.circleFrame, selected ? styles.circleFrameSelected : null, { width: cellW, height: cellH }] },
-        ce(View, { style: [styles.circleImg, { width: circle, height: circle }] },
+      return ce(View, { style: [styles.circleFrame, selected ? styles.circleFrameSelected : null, { width: slot, height: slot }] },
+        ce(View, { style: [styles.circleImg, { width: img, height: img, borderRadius: img / 2 }] },
           Image && item.cover
-            ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: circle, height: circle, borderRadius: circle / 2 } })
-            : null),
-        // TEMP DIAGNOSTIC (remove once settled): a TEXT marker, not a style
-        // swap -- X already launches the right game when the stick moves
-        // first, so the native side tracks focus correctly; this checks
-        // whether that ever reaches back into this render callback's own
-        // `selected` argument at all, independent of any paint/style doubt.
-        selected ? ce(Label, { style: { position: 'absolute', top: 2, right: 2, color: '#ff3b30', fontSize: F.Size4XSmall } }, '★') : null);
+            ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: img, height: img, borderRadius: img / 2 } })
+            : null));
     });
   }
 
@@ -448,33 +430,24 @@
   // a slightly different DEFAULT height.
   function renderCompactTrio(allItems, innerW, innerH, openItem) {
     var items = allItems.slice(0, 3);
-    // No label under the avatar (dropped per on-console feedback) -- the
-    // circle gets the whole slot instead of giving up room to a text line.
-    // 16px horizontal gutter between slots, plus CIRCLE_RING reserved on
-    // every side so the selection ring has room and isn't clipped.
+    // Same ported-verbatim fix as GridCell (see its comment): a single
+    // uniform `slot` size and a 6px image inset, not a separate frame/
+    // CIRCLE_RING margin -- matching the confirmed-working build exactly.
     var slotW = Math.floor(innerW / Math.max(1, items.length));
-    var circle = Math.max(28, Math.min(innerH, slotW - 16) - CIRCLE_RING);
-    var frame = circle + CIRCLE_RING;
-    // Same fix as GridCell (see its comment): matches the prior, confirmed-
-    // working build of this widget -- the ring rides the `selected`
-    // function-child argument via a plain conditional style, not
-    // focusedStyle, and the ring View it returns is the exact same size as
-    // the Focusable's own box (both frame x frame) rather than a smaller
-    // box centered inside a bigger one.
+    var slot = Math.min(innerH, slotW);
+    var img = Math.max(28, slot - 6);
     var cells = items.map(function (item, i) {
       return ce(wh.Focusable, {
         key: item.id || item.titleId || i,
         onPress: function () { openItem(item); },
-        style: { width: frame, height: frame, alignItems: 'center', justifyContent: 'center' }
+        style: { width: slot, height: slot, alignItems: 'center', justifyContent: 'center' }
       }, function (selected) {
         if (selected) debugLogSelect('Trio', item.id || item.titleId || '?');
-        return ce(View, { style: [styles.circleFrame, selected ? styles.circleFrameSelected : null, { width: frame, height: frame }] },
-          ce(View, { style: [styles.circleImg, { width: circle, height: circle }] },
+        return ce(View, { style: [styles.circleFrame, selected ? styles.circleFrameSelected : null, { width: slot, height: slot }] },
+          ce(View, { style: [styles.circleImg, { width: img, height: img, borderRadius: img / 2 }] },
             Image && item.cover
-              ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: circle, height: circle, borderRadius: circle / 2 } })
-              : null),
-          // TEMP DIAGNOSTIC (see GridCell's comment): text marker, not style.
-          selected ? ce(Label, { style: { position: 'absolute', top: 2, right: 2, color: '#ff3b30', fontSize: F.Size4XSmall } }, '★') : null);
+              ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: img, height: img, borderRadius: img / 2 } })
+              : null));
       });
     });
     return ce(View, { style: { flexDirection: 'row', justifyContent: 'space-evenly', alignItems: 'center' } }, cells);
@@ -514,26 +487,25 @@
   var GRID_COLUMNS = 3, GRID_ROWS = 3;
   function renderGrid(allItems, innerW, innerH, openItem) {
     var gap = 8;
-    // cellW/cellH no longer need to match: a circle-with-label-below cell is
-    // taller than it is wide for a given avatar size, unlike the old square
-    // tile-with-overlay layout, so each dimension gets its own share of the
-    // available box.
-    var cellW = Math.floor((innerW - gap * (GRID_COLUMNS - 1)) / GRID_COLUMNS);
-    var cellH = Math.floor((innerH - gap * (GRID_ROWS - 1)) / GRID_ROWS);
+    // Back to a single, uniform cellSize (Math.min of both dimensions),
+    // matching the confirmed-working build exactly -- GridCell takes one
+    // `size` prop, not separate cellW/cellH.
+    var byWidth = Math.floor((innerW - gap * (GRID_COLUMNS - 1)) / GRID_COLUMNS);
+    var byHeight = Math.floor((innerH - gap * (GRID_ROWS - 1)) / GRID_ROWS);
+    var cellSize = Math.min(byWidth, byHeight);
     var items = allItems.slice(0, GRID_COLUMNS * GRID_ROWS);
     var lines = [];
     for (var r = 0; r < GRID_ROWS; r++) {
       var cells = [];
       for (var col = 0; col < GRID_COLUMNS; col++) {
         var idx = r * GRID_COLUMNS + col;
-        if (idx >= items.length) { cells.push(ce(View, { key: 'e' + idx, style: { width: cellW, height: cellH } })); }
+        if (idx >= items.length) { cells.push(ce(View, { key: 'e' + idx, style: { width: cellSize, height: cellSize } })); }
         else {
           var item = items[idx];
           cells.push(ce(GridCell, {
             key: item.id || item.titleId || idx,
             item: item,
-            cellW: cellW,
-            cellH: cellH,
+            size: cellSize,
             onPress: (function (it) { return function () { openItem(it); }; })(item)
           }));
         }
