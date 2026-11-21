@@ -89,16 +89,9 @@
   // patching over the sharp corner tips with a convincing rounded-looking
   // edge instead of actually clipping anything.
   var FAN_CORNER_FIX_URI = 'http://127.0.0.1:8098/orbit-latest/fan-corner-fix.png';
-  // Selection ring around a circular avatar (grid + list trio). Both
-  // GridCell and renderCompactTrio used to size the circle to fill its
-  // whole cell/slot and only then add this ring on top -- the ring had no
-  // room left and got clipped by the cell's own bounds, which is why the
-  // white selected-ring was invisible on console. Both now reserve this
-  // much space up front so the ring always fits inside the cell.
-  var CIRCLE_RING = 16;
   // TEMP DEBUG (remove once the key-guide-bar investigation is done): posts
   // to the exact same /__log endpoint + widget tag wh-inspector v23-25 use,
-  // so a GridCell/Row becoming `selected` interleaves, by timestamp, into
+  // so a GridCell becoming `selected` interleaves, by timestamp, into
   // the SAME /data/wh-inspector.log -- no separate log to fetch or
   // cross-reference. The goal is to see whether moving the selection
   // WITHIN this widget's own grid/list ever produces a new
@@ -121,16 +114,6 @@
     card: { borderRadius: 16, overflow: 'hidden' },
     mat: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: MAT, borderRadius: 16 },
     body: { flex: 1, padding: 16 },
-    row: { flexDirection: 'row', alignItems: 'center', borderRadius: 10, paddingHorizontal: 8 },
-    rowFocused: { backgroundColor: '#ffffff1f' },
-    // overflow:'hidden' right here (not just borderRadius on the Image
-    // itself) is what actually clips the cover art to rounded corners --
-    // same finding as borderWidth/borderColor elsewhere in this widget:
-    // a style applied directly to an Image isn't trustworthy on this
-    // runtime, but a View wrapping it with overflow:hidden + matching
-    // borderRadius reliably clips whatever's inside, image included.
-    cover: { borderRadius: 6, marginRight: 10, backgroundColor: '#263a58', overflow: 'hidden' },
-    coverPlaceholder: { alignItems: 'center', justifyContent: 'center' },
     dim: { opacity: 0.6 },
     small: { fontSize: F.Size4XSmall },   // 15
     body18: { fontSize: F.Size3XSmall },  // 18
@@ -192,28 +175,6 @@
     heroCoverFrame: { borderRadius: 16, overflow: 'hidden', backgroundColor: '#263a58' }
   });
 
-  // A per-game catalog row: X (or press) launches Orbit Store. wh.Focusable
-  // passes `selected` to a function child, same idiom as hello-wh's Chip.
-  function Row(props) {
-    var item = props.item;
-    return ce(wh.Focusable, {
-      onPress: props.onPress,
-      style: [styles.row, { height: props.rowHeight }],
-      focusedStyle: styles.rowFocused
-    }, function (selected) {
-      if (selected) debugLogSelect('Row', item.id || item.titleId || '?');
-      var titleStyle = props.compact ? [styles.small, { flex: 1 }] : { flex: 1, fontSize: F.Size3XSmall };
-      return ce(View, { style: { flexDirection: 'row', alignItems: 'center', flex: 1 } },
-        !props.compact
-          ? ce(View, { style: [styles.cover, styles.coverPlaceholder, { width: props.coverSize, height: props.coverSize }] },
-              Image && item.cover
-                ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: props.coverSize, height: props.coverSize, borderRadius: 6 } })
-                : ce(Label, { style: [styles.small, styles.dim] }, '?'))
-          : null,
-        ce(Label, { style: titleStyle, numberOfLines: 1 }, String(item.title || item.titleId || '?'))
-      );
-    });
-  }
 
   // A grid cell: circular avatar. Ported verbatim (just squared circle
   // instead of square tile) from the prior build of this widget whose grid
@@ -296,14 +257,19 @@
     // note at the top of the file) rather than a separate Options popup.
     var W = (props && props.width) || 504;
     var H = (props && props.height) || 152;
-    var compact = H < 300;              // DEFAULT (152)
-    var mode = H < 300 ? 'list' : (H < 450 ? 'grid' : 'cover');
-    // List and grid both drop the "Orbit Store" icon+title row now (per
-    // on-console feedback it was wasted space at either size) and, freed
-    // of the header, also use a tighter 8px edge padding instead of the
-    // standard 16px so the circles get noticeably bigger -- closer to the
-    // size of the PS5's own stock "controllers" widget's circles.
-    var noHeader = mode === 'list' || mode === 'grid';
+    var compact = H < 300;              // DEFAULT (152): 3 icons, one row
+    // Only two layouts now: the grid (3 icons at DEFAULT, 3x3 at LARGE/FULL)
+    // and cover. The old dense text list is gone -- it was dead code anyway
+    // (DEFAULT always took the compact trio branch before it could ever be
+    // reached), and the "list"/"grid" split added nothing once both sizes
+    // show circular avatars through the exact same GridCell/ring mechanism.
+    var mode = H < 450 ? 'grid' : 'cover';
+    // Grid drops the "Orbit Store" icon+title row (per on-console feedback
+    // it was wasted space) and, freed of the header, also uses a tighter
+    // 8px edge padding instead of the standard 16px so the circles get
+    // noticeably bigger -- closer to the size of the PS5's own stock
+    // "controllers" widget's circles.
+    var noHeader = mode === 'grid';
     var pad = noHeader ? 8 : 16, titleH = 40, gap = 8;
     var innerW = W - pad;
     var innerH = noHeader ? H - pad : H - pad - titleH - gap;
@@ -404,12 +370,12 @@
       body = ce(Label, { style: styles.dim, numberOfLines: 2 }, 'Erreur: ' + data.error);
     } else if (!total) {
       body = ce(Label, { style: styles.dim }, 'Aucun jeu dans le catalogue.');
-    } else if (mode === 'grid') {
-      body = renderGrid(data.items, innerW, innerH, openItem);
-    } else if (compact) {
-      body = renderCompactTrio(data.items, innerW, innerH, openItem);
     } else {
-      body = renderList(data.items, compact, innerH, openItem);
+      // DEFAULT: one row of 3. LARGE/FULL: the full 3x3 grid. Same
+      // renderGrid/GridCell both times -- just a different column/row cap.
+      body = compact
+        ? renderGrid(data.items, innerW, innerH, openItem, 3, 1)
+        : renderGrid(data.items, innerW, innerH, openItem, 3, 3);
     }
 
     var badge = data.loading ? null : (total ? total + ' jeu' + (total === 1 ? '' : 'x') : null);
@@ -422,83 +388,26 @@
     );
   }
 
-  // DEFAULT size (compact, 152 tall): a single row of up to 3 circular
-  // avatars with the title below each, matching the approved mockup --
-  // replaces the earlier dense text-only list at this size. circle is
-  // sized to whatever vertical room is actually left after the header and
-  // a one-line label, so it still adapts if the hub ever hands this widget
-  // a slightly different DEFAULT height.
-  function renderCompactTrio(allItems, innerW, innerH, openItem) {
-    var items = allItems.slice(0, 3);
-    // Same ported-verbatim fix as GridCell (see its comment): a single
-    // uniform `slot` size and a 6px image inset, not a separate frame/
-    // CIRCLE_RING margin -- matching the confirmed-working build exactly.
-    var slotW = Math.floor(innerW / Math.max(1, items.length));
-    var slot = Math.min(innerH, slotW);
-    var img = Math.max(28, slot - 6);
-    var cells = items.map(function (item, i) {
-      return ce(wh.Focusable, {
-        key: item.id || item.titleId || i,
-        onPress: function () { openItem(item); },
-        style: { width: slot, height: slot, alignItems: 'center', justifyContent: 'center' }
-      }, function (selected) {
-        if (selected) debugLogSelect('Trio', item.id || item.titleId || '?');
-        return ce(View, { style: [styles.circleFrame, selected ? styles.circleFrameSelected : null, { width: slot, height: slot }] },
-          ce(View, { style: [styles.circleImg, { width: img, height: img, borderRadius: img / 2 }] },
-            Image && item.cover
-              ? ce(Image, { source: { uri: item.cover }, resizeMode: 'cover', style: { width: img, height: img, borderRadius: img / 2 } })
-              : null));
-      });
-    });
-    return ce(View, { style: { flexDirection: 'row', justifyContent: 'space-evenly', alignItems: 'center' } }, cells);
-  }
-
-  // LARGE/FULL "list" mode: a dense text row per game, cover art once
-  // there's room (same layout this widget always had -- untouched by the
-  // Nov 2026 refresh, which only changed the DEFAULT-size trio above and
-  // the grid/jaquette modes).
-  function renderList(allItems, compact, innerH, openItem) {
-    var rowH = compact ? 28 : 56;
-    var coverSize = compact ? 0 : 40;
-    var maxRows = Math.max(1, Math.floor(innerH / rowH));
-    var items = allItems.slice(0, maxRows > 1 && allItems.length > maxRows ? maxRows - 1 : maxRows);
-    var hidden = allItems.length - items.length;
-    var rows = items.map(function (item, i) {
-      return ce(Row, {
-        key: item.id || item.titleId || i,
-        item: item,
-        compact: compact,
-        rowHeight: rowH,
-        coverSize: coverSize,
-        onPress: function () { openItem(item); }
-      });
-    });
-    if (hidden > 0) {
-      rows.push(ce(View, { key: '__more', style: { height: rowH, justifyContent: 'center', paddingHorizontal: 8 } },
-        ce(Label, { style: [styles.small, styles.dim] }, '+' + hidden + ' de plus')));
-    }
-    return ce(View, null, rows);
-  }
-
-  // Grid mode: always a fixed 3x3 -- 9 equal squares, never a different
-  // count or size depending on how many games there are or how tall the
-  // tile happens to be. Arrows/L1/R1 already move between cells by screen
-  // position -- the SDK's own wh.Focusable behaviour.
-  var GRID_COLUMNS = 3, GRID_ROWS = 3;
-  function renderGrid(allItems, innerW, innerH, openItem) {
+  // Only one layout left for non-cover sizes: a grid of circular avatars,
+  // GridCell's confirmed-working ring and all. DEFAULT asks for columns=3,
+  // rows=1 (3 icons, one row); LARGE/FULL for columns=3, rows=3 (9 icons).
+  // Never a different count depending on how many games there are or how
+  // tall the tile happens to be -- arrows/L1/R1 already move between cells
+  // by screen position, the SDK's own wh.Focusable behaviour.
+  function renderGrid(allItems, innerW, innerH, openItem, columns, rows) {
     var gap = 8;
-    // Back to a single, uniform cellSize (Math.min of both dimensions),
-    // matching the confirmed-working build exactly -- GridCell takes one
-    // `size` prop, not separate cellW/cellH.
-    var byWidth = Math.floor((innerW - gap * (GRID_COLUMNS - 1)) / GRID_COLUMNS);
-    var byHeight = Math.floor((innerH - gap * (GRID_ROWS - 1)) / GRID_ROWS);
+    // A single, uniform cellSize (Math.min of both dimensions), matching
+    // the confirmed-working build exactly -- GridCell takes one `size`
+    // prop, not separate cellW/cellH.
+    var byWidth = Math.floor((innerW - gap * (columns - 1)) / columns);
+    var byHeight = Math.floor((innerH - gap * (rows - 1)) / rows);
     var cellSize = Math.min(byWidth, byHeight);
-    var items = allItems.slice(0, GRID_COLUMNS * GRID_ROWS);
+    var items = allItems.slice(0, columns * rows);
     var lines = [];
-    for (var r = 0; r < GRID_ROWS; r++) {
+    for (var r = 0; r < rows; r++) {
       var cells = [];
-      for (var col = 0; col < GRID_COLUMNS; col++) {
-        var idx = r * GRID_COLUMNS + col;
+      for (var col = 0; col < columns; col++) {
+        var idx = r * columns + col;
         if (idx >= items.length) { cells.push(ce(View, { key: 'e' + idx, style: { width: cellSize, height: cellSize } })); }
         else {
           var item = items[idx];
@@ -509,11 +418,11 @@
             onPress: (function (it) { return function () { openItem(it); }; })(item)
           }));
         }
-        if (col < GRID_COLUMNS - 1) cells.push(ce(View, { key: 'g' + idx, style: { width: gap } }));
+        if (col < columns - 1) cells.push(ce(View, { key: 'g' + idx, style: { width: gap } }));
       }
       lines.push(ce(View, { key: 'row' + r, style: [styles.gridRow, r > 0 ? { marginTop: gap } : null] }, cells));
     }
-    // The 3x3 block is usually smaller than the available box in one
+    // The grid block is usually smaller than the available box in one
     // dimension -- center it in both so the leftover space is split evenly
     // instead of all landing on one side.
     return ce(View, { style: { width: innerW, height: innerH, alignItems: 'center', justifyContent: 'center' } }, lines);
