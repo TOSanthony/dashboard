@@ -369,13 +369,13 @@
     } else if (!total) {
       body = ce(Label, { style: styles.dim }, 'Aucun jeu dans le catalogue.');
     } else {
-      // DEFAULT: one row of 3, circles pinned to a fixed 122x122 (the exact
-      // size asked for, rather than whatever innerW/innerH happens to fit).
-      // LARGE/FULL: the full 3x3 grid, still sized to fit the box. Same
-      // renderGrid/GridCell both times -- just a different column/row cap.
+      // DEFAULT: one row of 3. LARGE/FULL: 3x2 (6 icons). Both pinned to the
+      // same fixed 122x122 circle size, rather than whatever innerW/innerH
+      // happens to fit -- same renderGrid/GridCell, just a different
+      // column/row cap.
       body = compact
         ? renderGrid(data.items, innerW, innerH, openItem, 3, 1, 122)
-        : renderGrid(data.items, innerW, innerH, openItem, 3, 3);
+        : renderGrid(data.items, innerW, innerH, openItem, 3, 2, 122);
     }
 
     var badge = data.loading ? null : (total ? total + ' jeu' + (total === 1 ? '' : 'x') : null);
@@ -390,10 +390,11 @@
 
   // Only one layout left for non-cover sizes: a grid of circular avatars,
   // GridCell's confirmed-working ring and all. DEFAULT asks for columns=3,
-  // rows=1 (3 icons, one row); LARGE/FULL for columns=3, rows=3 (9 icons).
-  // Never a different count depending on how many games there are or how
-  // tall the tile happens to be -- arrows/L1/R1 already move between cells
-  // by screen position, the SDK's own wh.Focusable behaviour.
+  // rows=1 (3 icons, one row); LARGE/FULL for columns=3, rows=2 (6 icons).
+  // Both pinned to the same fixed circle size. Never a different count
+  // depending on how many games there are or how tall the tile happens to
+  // be -- arrows/L1/R1 already move between cells by screen position, the
+  // SDK's own wh.Focusable behaviour.
   function renderGrid(allItems, innerW, innerH, openItem, columns, rows, fixedSize) {
     var cellSize;
     if (fixedSize) {
