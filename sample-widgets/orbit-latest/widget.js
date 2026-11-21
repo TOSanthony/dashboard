@@ -174,14 +174,14 @@
   });
 
 
-  // A grid cell: TEST -- same `selected`-driven ring/frame mechanism exactly
-  // as the confirmed-working build, title bar dropped and the frame/image
-  // made round (borderRadius = half the side) instead of the square 8/6px
-  // corners, to see whether the ring still shows up once the shape alone
-  // changes back to round. onPress/Focusable/the ring logic are untouched.
+  // A grid cell: confirmed-working `selected`-driven ring/frame mechanism,
+  // round avatars, no title bar. The ring is the white gridFrame showing
+  // through the gap between the frame's edge and the image inside it, so
+  // its thickness is just that gap -- widened here (was 3px/side) to match
+  // the mockup's noticeably thicker ring.
   function GridCell(props) {
     var item = props.item, slot = props.size;
-    var img = Math.max(28, slot - 6);
+    var img = Math.max(28, slot - 14);
     return ce(wh.Focusable, {
       onPress: props.onPress,
       style: { width: slot, height: slot, alignItems: 'center', justifyContent: 'center' }
@@ -393,7 +393,16 @@
   // tall the tile happens to be -- arrows/L1/R1 already move between cells
   // by screen position, the SDK's own wh.Focusable behaviour.
   function renderGrid(allItems, innerW, innerH, openItem, columns, rows) {
-    var gap = 8;
+    // Gap scales with the cell size instead of a fixed 8px, to match the
+    // mockup's spacing (noticeably tighter at DEFAULT's 3 big circles,
+    // noticeably looser in absolute px at LARGE's 3x3 small ones) -- first
+    // pass estimates the cell size with a nominal gap, then the real gap is
+    // derived from that estimate and the grid is laid out with it.
+    var gapGuess = 8;
+    var byWidthG = Math.floor((innerW - gapGuess * (columns - 1)) / columns);
+    var byHeightG = Math.floor((innerH - gapGuess * (rows - 1)) / rows);
+    var cellSizeGuess = Math.min(byWidthG, byHeightG);
+    var gap = Math.max(6, Math.round(cellSizeGuess * 0.16));
     // A single, uniform cellSize (Math.min of both dimensions), matching
     // the confirmed-working build exactly -- GridCell takes one `size`
     // prop, not separate cellW/cellH.
