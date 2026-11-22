@@ -203,14 +203,15 @@
   }
 
   // LARGE: grille de 6 icones (3x2), confirmed-working selector mechanism,
-  // forme (rond/carre) venant du menu Options.
+  // forme (rond/carre) venant du menu Options. Icones fixees a 122x122,
+  // comme dans orbit-latest.
   function LargeView(props) {
-    return renderGrid(props.items, props.innerW, props.innerH, 3, 2, null, props.shape);
+    return renderGrid(props.items, props.innerW, props.innerH, 3, 2, 122, props.shape);
   }
 
-  // FULL: grille de 9 icones (3x3), meme mecanisme.
+  // FULL: grille de 9 icones (3x3), meme mecanisme, memes 122x122.
   function FullView(props) {
-    return renderGrid(props.items, props.innerW, props.innerH, 3, 3, null, props.shape);
+    return renderGrid(props.items, props.innerW, props.innerH, 3, 3, 122, props.shape);
   }
 
   function JeuxFavoris(props) {
