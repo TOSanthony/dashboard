@@ -14,6 +14,16 @@
         { "value": "alpha", "label": "Alphabetique" }
       ],
       "default": "recents"
+    },
+    {
+      "id": "shape",
+      "title": "Forme des icones",
+      "type": "choice",
+      "options": [
+        { "value": "round", "label": "Rond" },
+        { "value": "square", "label": "Carre (bords arrondis)" }
+      ],
+      "default": "round"
     }
   ]
 }
